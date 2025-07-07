@@ -73,6 +73,10 @@ def handle_follow(event):
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
+    """
+    使用者輸入文字訊息，需要判斷該訊息是否為特定的操作。
+    用狀態區分是普通訊息還是操作。
+    """
     user_id = event.source.user_id
     text = event.message.text.strip()
 
@@ -93,14 +97,12 @@ def handle_message(event):
     elif current_state.status == UserStateEnum.AWAITING_TA_QUESTION:
         ta_service.submit_question(user_id, text, event.reply_token, student)
         return
+    elif current_state.status == UserStateEnum.AWATING_CONTENTS_NAME:
+        pass
 
     # 3. 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
     if text == "助教安安，我有問題!":
         ta_service.start_inquiry(user_id, event.reply_token)
-    elif text == "我要請假":
-        pass
-    elif text == "點名結果查詢":
-        pass
     else:
         # 其他文字指令或預設回覆
         handle_default_message(event, student)
@@ -108,11 +110,32 @@ def handle_message(event):
 
 @handler.add(PostbackEvent)
 def handle_postback(event):
+    """
+    main menu:
+    + 請假按鈕
+    + 查詢出席
+
+    請假:
+    + 是
+    + 否
+
+    總結評分表單:
+    + 取得分數
+    + 重新評分
+    + 人工評分
+
+    總結人工評分:
+    + 是
+    + 否
+
+    """
     user_id = event.source.user_id
     with ApiClient(configuration) as api_client:
         if event.postback.data == 'apply_leave':
             leave_service.apply_for_leave(user_id)
-        if event.postback.data == '[Action]Ask_for_leave':
+        elif event.postback.data == 'fetch_absence_info':
+            attendance_service.check_attendance(user_id)
+        elif event.postback.data == '[Action]Ask_for_leave':
             leave_service.ask_leave_reason(user_id)
         elif event.postback.data == '[INFO]get_summary_grading':
             pass
