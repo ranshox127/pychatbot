@@ -2,8 +2,12 @@ class LeaveService:
     def __init__(self):
         pass
     
-    def apply_for_leave(self, student, next_class_date):
+    def apply_for_leave(self, user_id: str):
         pass
+        # student = self.student_repo.find_by_line_id(user_id)
+        # course = self.course_repo.get_course(student.context_title)
+        # next_course_date = course.get_next_course_date()
+        # self.line_service
         # 1. get the student
         # 2. get the next class date
         # 3. send the ConfirmTemplate
@@ -27,8 +31,11 @@ class LeaveService:
         #     )
         # )
         
-    def ask_leave_reason(self, student):
+    def ask_leave_reason(self, user_id: str):
         pass
+        # student = self.student_repo.find_by_line_id(user_id)
+        # self.state_manager.set_state(user_id, UserStateEnum.AWAITING_LEAVE_REASON)
+        # self.line_service
         # 1. get the student
         # 2. change the student's state to AWAITING_LEAVE_REASON
         # 3. send the text message to the student
@@ -37,6 +44,16 @@ class LeaveService:
         
     def submit_leave_reason(self, student, reason):
         pass
+        # student = self.student_repo.find_by_line_id(user_id)
+        # self.state_manager.set_state(user_id, UserStateEnum.IDLE)
+        # self.event_repo.save_event()
+        
+        # course = self.course_repo.get_course(student.context_title)
+        # next_course_date = course.get_next_course_date()
+        # self.leave_repo
+        # self.line_service
+        # self.mail_carrier
+        
         # 1. get the student
         # 2. change the student's state to IDLE
         # 3. save the record to the database

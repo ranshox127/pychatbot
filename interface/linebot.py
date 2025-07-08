@@ -83,29 +83,31 @@ def handle_message(event):
     # 檢查用戶是否已註冊
     student = student_repository.find_by_line_id(user_id)
 
+    # 如果還沒註冊，收到的任何訊息都當作是學號，嘗試註冊
     if not student:
-        # 如果還沒註冊，收到的任何訊息都當作是學號，嘗試註冊
         result = registration_service.register_student(user_id, text)
         line_api_service.reply_text(event.reply_token, result.message)
         return
+
     # 2. 根據「狀態」決定如何處理訊息 (狀態機路由)
     current_state = state_manager.get_state(user_id)
 
     if current_state.status == UserStateEnum.AWAITING_LEAVE_REASON:
-        leave_service.submit_reason(user_id, text, event.reply_token, student)
+        leave_service.submit_leave_reason(user_id, text, event.reply_token, student)
         return
     elif current_state.status == UserStateEnum.AWAITING_TA_QUESTION:
         ta_service.submit_question(user_id, text, event.reply_token, student)
         return
-    elif current_state.status == UserStateEnum.AWATING_CONTENTS_NAME:
+    elif current_state.status == UserStateEnum.AWAITING_CONTENTS_NAME:
+        pass
+    elif current_state.status == UserStateEnum.AWAITING_RE-GRADE_BY_TA_REASON:
         pass
 
     # 3. 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
     if text == "助教安安，我有問題!":
         ta_service.start_inquiry(user_id, event.reply_token)
     else:
-        # 其他文字指令或預設回覆
-        handle_default_message(event, student)
+        pass
 
 
 @handler.add(PostbackEvent)
@@ -114,6 +116,7 @@ def handle_postback(event):
     main menu:
     + 請假按鈕
     + 查詢出席
+    + 查詢成績
 
     請假:
     + 是
@@ -135,8 +138,12 @@ def handle_postback(event):
             leave_service.apply_for_leave(user_id)
         elif event.postback.data == 'fetch_absence_info':
             attendance_service.check_attendance(user_id)
-        elif event.postback.data == '[Action]Ask_for_leave':
+        elif event.postback.data == 'check_homework':
+            pass
+        elif event.postback.data == '[Action]confirm_to_leave':
             leave_service.ask_leave_reason(user_id)
+        elif event.postback.data == '[Action]cancel_to_leave':
+            pass
         elif event.postback.data == '[INFO]get_summary_grading':
             pass
         elif event.postback.data == '[INFO]summary_re-gradding':
