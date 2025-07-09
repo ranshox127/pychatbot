@@ -80,27 +80,32 @@ def handle_message(event):
     user_id = event.source.user_id
     text = event.message.text.strip()
 
-    # 檢查用戶是否已註冊
+    # 第一層：存在性檢查
     student = student_repository.find_by_line_id(user_id)
-
-    # 如果還沒註冊，收到的任何訊息都當作是學號，嘗試註冊
     if not student:
-        result = registration_service.register_student(user_id, text)
-        line_api_service.reply_text(event.reply_token, result.message)
+        # 如果使用者不存在，任何訊息都視為嘗試註冊學號
+        registration_service.register_student(user_id, text, event.reply_token)
         return
 
-    # 2. 根據「狀態」決定如何處理訊息 (狀態機路由)
-    current_state = state_manager.get_state(user_id)
+    # 第二層：領域狀態檢查 (雖然在目前流程中，不存在的用戶已處理，但這是一個好的實踐)
+    # 這裡的 is_registered() 來自 domain/student.py
+    if not student.is_registered():
+        # 可能處於剛加入好友但還未輸入學號的狀態
+        registration_service.register_student(user_id, text, event.reply_token)
+        return
 
-    if current_state.status == UserStateEnum.AWAITING_LEAVE_REASON:
+    # 第三層：對話狀態檢查
+    # 這裡的 UserStateEnum 來自 application/state_management_service.py
+    session_state = state_manager.get_state(user_id)
+    if session_state == UserStateEnum.AWAITING_LEAVE_REASON:
         leave_service.submit_leave_reason(user_id, text, event.reply_token, student)
         return
-    elif current_state.status == UserStateEnum.AWAITING_TA_QUESTION:
+    elif session_state == UserStateEnum.AWAITING_TA_QUESTION:
         ta_service.submit_question(user_id, text, event.reply_token, student)
         return
-    elif current_state.status == UserStateEnum.AWAITING_CONTENTS_NAME:
+    elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
         pass
-    elif current_state.status == UserStateEnum.AWAITING_RE-GRADE_BY_TA_REASON:
+    elif session_state == UserStateEnum.AWAITING_RE-GRADE_BY_TA_REASON:
         pass
 
     # 3. 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
