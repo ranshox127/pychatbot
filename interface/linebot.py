@@ -68,7 +68,7 @@ def linebot():
 @handler.add(FollowEvent)
 def handle_follow(event):
     user_id = event.source.user_id
-    registration_service.handle_follow_event(user_id)
+    registration_service.handle_follow_event(user_id, event.reply_token)
 
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -98,7 +98,8 @@ def handle_message(event):
     # 這裡的 UserStateEnum 來自 application/state_management_service.py
     session_state = state_manager.get_state(user_id)
     if session_state == UserStateEnum.AWAITING_LEAVE_REASON:
-        leave_service.submit_leave_reason(user_id, text, event.reply_token, student)
+        leave_service.submit_leave_reason(
+            user_id, text, event.reply_token, student)
         return
     elif session_state == UserStateEnum.AWAITING_TA_QUESTION:
         ta_service.submit_question(user_id, text, event.reply_token, student)

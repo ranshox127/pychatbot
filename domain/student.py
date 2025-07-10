@@ -1,11 +1,15 @@
 # domain/student.py
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Optional
+
 
 class RoleEnum(Enum):
     TEACHER = 3
     TA = 4
     STUDENT = 5
+
 
 class StudentStatus(Enum):
     UNREGISTERED = auto()
@@ -21,7 +25,7 @@ class Student:
     name: str
     context_title: str
     role: RoleEnum
-    is_active: bool # 取代 del 欄位，意義更清晰
+    is_active: bool  # 取代 del 欄位，意義更清晰
     status: StudentStatus
 
     @staticmethod
@@ -47,3 +51,17 @@ class Student:
 
     def is_registered(self) -> bool:
         return self.status == StudentStatus.REGISTERED
+
+
+class StudentRepository(ABC):
+    @abstractmethod
+    def find_by_line_id(self, line_user_id: str) -> Optional[Student]:
+        pass
+
+    @abstractmethod
+    def find_by_student_id(self, student_id: str) -> Optional[Student]:
+        pass
+
+    @abstractmethod
+    def save(self, student: Student) -> None:
+        pass
