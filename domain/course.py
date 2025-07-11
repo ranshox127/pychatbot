@@ -31,5 +31,9 @@ class CourseRepository(ABC):
         pass
 
     @abstractmethod
-    def get_course_info(self, context_title: str) -> Course:
+    def get_course_shell(self, context_title: str) -> Course:
+        pass
+
+    @abstractmethod
+    def populate_units(self, course: Course) -> Course:
         pass
