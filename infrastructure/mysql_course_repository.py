@@ -1,34 +1,65 @@
 import pymysql
 
-from domain.course import Course, CourseRepository
+from domain.course import Course, CourseRepository, CourseUnit, DeadlinesVO
 
 
 class MySQLCourseRepository(CourseRepository):
-    def __init__(self, db_config: dict):
-        self.db_config = db_config
+    def __init__(self, linebot_db_config: dict, rs_db_config: dict):
+        self.linebot_db_config = linebot_db_config
+        self.rs_db_config = rs_db_config
 
-    def _get_connection(self):
-        return pymysql.connect(**self.db_config)
+    def _get_linebot_db_connection(self):
+        return pymysql.connect(**self.linebot_db_config)
+
+    def _get_rs_db_connection(self):
+        return pymysql.connect(**self.rs_db_config)
 
     def get_in_progress_courses(self, reserved: str = "") -> list[Course]:
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
+        with self._get_linebot_db_connection() as conn:
+            with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = """
-                SELECT context_title
+                SELECT context_title, mails_of_TAs, OJ_contest_title, present_url
                 FROM course_info
                 WHERE status = 'in_progress' AND reserved LIKE %s;
                 """
                 cur.execute(query, (reserved,))
-                row = cur.fetchone()
-                return [self._map_row_to_course(row)] if row else []
+                rows = cur.fetchall()
+                return [self._map_row_to_course(row) for row in rows] if rows else []
 
-    def get_course_info(self, context_title: str) -> Course:
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
+    def get_course_shell(self, context_title: str) -> Course:
+        with self._get_linebot_db_connection() as conn:
+            with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = "SELECT * FROM course_info WHERE context_title = %s;"
                 cur.execute(query, (context_title,))
                 row = cur.fetchone()
                 return self._map_row_to_course(row) if row else None
+
+    def populate_units(self, course: Course) -> Course:
+        with self._get_rs_db_connection() as conn:
+            with conn.cursor(pymysql.cursors.DictCursor) as cur:
+                query = '''
+                    SELECT contents_name
+                    FROM review_system.review_publish
+                    WHERE context_title = %s
+                    AND publish_flag = 1;
+                '''
+                cur.execute(query, (course.context_title,))
+                rows = cur.fetchall()
+
+                units = []
+                for row in rows:
+                    # or row['contents_name'] if using DictCursor
+                    contents_name = row[0]
+                    unit_name = contents_name.split('_')[0]
+                    unit = CourseUnit(
+                        name=unit_name,
+                        deadlines=DeadlinesVO(
+                            oj_d1=6, summary_d1=7)  # 可依照需要填入預設值
+                    )
+                    units.append(unit)
+                course.units = units
+
+        return course
 
     def _map_row_to_course(self, row: dict) -> Course:
         return Course(
