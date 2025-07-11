@@ -1,6 +1,4 @@
-import json
 import os
-import requests
 from flask import Blueprint, request, abort, current_app
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -9,52 +7,34 @@ from linebot.v3.messaging import (
     ApiClient,
     MessagingApi,
     ReplyMessageRequest,
-    TextMessage,
-    ButtonsTemplate,
-    TemplateMessage,
-    PostbackAction,
-    URIAction,
-    MessageAction,
-    ConfirmTemplate
-)
+    TextMessage)
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, PostbackEvent, FollowEvent
 
+from containers import AppContainer
+from dependency_injector.wiring import inject, Provide
+
+# Import service classes just for type hinting
 from application.registration_service import RegistrationService
-from domain import student_repository
-from infrastructure.mysql_student_repository import MySQLStudentRepository
-from infrastructure.gateways.line_api_service import LineApiService
 
 linebot_bp = Blueprint('linebot', __name__)
 
-LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
-configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
-
-line_bot_api_client = ApiClient(configuration)
-line_bot_api = MessagingApi(line_bot_api_client)
-
-db_config = {...}
-student_repository = MySQLStudentRepository(db_config)
-moodle_repository = MySQLMoodleRepository(...)
-line_api_service = LineApiService(line_bot_api)
-registration_service = RegistrationService(
-    student_repository, moodle_repository, line_api_service)
-
-
-command_handlers = {
-    "助教安安，我有問題!": handle_student_help,
-    "我要請假": student_ask_for_leave,
-    "give_me_postback": get_postback
-}
+# command_handlers = {
+#     "助教安安，我有問題!": handle_student_help,
+#     "我要請假": student_ask_for_leave,
+#     "give_me_postback": get_postback
+# }
 
 
 @linebot_bp.route('/linebot/', methods=['POST'])
-def linebot():
+@inject
+def linebot(
+    # Inject the channel secret from the container's config
+    handler: WebhookHandler = Provide[AppContainer.config.LINE_CHANNEL_SECRET.provider.last_value.then(
+        WebhookHandler)]
+):
     signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
-    current_app.logger.info("Request body: " + body)
 
     try:
         handler.handle(body, signature)
@@ -66,7 +46,12 @@ def linebot():
 
 
 @handler.add(FollowEvent)
-def handle_follow(event):
+@inject
+def handle_follow(
+    event,
+    # Inject the RegistrationService instance
+    registration_service: RegistrationService = Provide[AppContainer.registration_service]
+):
     user_id = event.source.user_id
     registration_service.handle_follow_event(user_id, event.reply_token)
 

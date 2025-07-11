@@ -1,18 +1,36 @@
 # config/settings.py
 import os
 
+
 class BaseConfig:
-    DB_CONFIG = {...}
+    SECRET_KEY = os.getenv('SECRET_KEY', 'a-very-secret-key')
+
 
 class DevelopmentConfig(BaseConfig):
-    LINE_ACCESS_TOKEN = os.getenv("DEV_LINE_TOKEN")
     FLASK_DEBUG = True
+    LINE_ACCESS_TOKEN = os.getenv("DEV_LINE_TOKEN")
+    LINE_CHANNEL_SECRET = os.getenv("DEV_LINE_SECRET")
+    DB_CONFIG = {...}
+    SSH_CONFIG = {...}
+    LINE_RICH_MENUS = {
+        "main": "richmenu-xxxxxxxxxxxx",
+        "register": "richmenu-yyyyyyyyyyyy"
+    }
+
 
 class ProductionConfig(BaseConfig):
+    FLASK_DEBUG = False
     LINE_ACCESS_TOKEN = os.getenv("PROD_LINE_TOKEN")
+    LINE_CHANNEL_SECRET = os.getenv("PROD_LINE_SECRET")
+    DB_CONFIG = {...}
+    SSH_CONFIG = {...}
+    LINE_RICH_MENUS = {
+        "main": "richmenu-aaaaaaaaaaaa",
+        "register": "richmenu-bbbbbbbbbbbb"
+    }
 
-env = os.getenv("FLASK_ENV", "production")
-if env == "development":
-    app.config.from_object(DevelopmentConfig)
-else:
-    app.config.from_object(ProductionConfig)
+
+CONFIG_BY_NAME = {
+    "development": DevelopmentConfig,
+    "production": ProductionConfig,
+}

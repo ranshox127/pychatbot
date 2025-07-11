@@ -1,39 +1,58 @@
-from linebot.v3.messaging import ApiClient, MessagingApi, SetWebhookEndpointRequest, Configuration
 import os
+import sys
+
+import ngrok
 from dotenv import load_dotenv
 from flask import Flask
-import ngrok
+from linebot.v3.messaging import (ApiClient, Configuration, MessagingApi,
+                                  SetWebhookEndpointRequest)
 
-from interface import register_blueprints
+from config.settings import CONFIG_BY_NAME
+from containers import AppContainer
+from interfaces import linebot
 
-# 環境初始化
-load_dotenv()
 PORT = 8095
 
-NGROK_AUTHTOKEN = os.getenv("NGROK_AUTHTOKEN")
-LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 
-# 啟動 ngrok 並轉發
-listener = ngrok.forward(PORT, authtoken=NGROK_AUTHTOKEN)
-ngrok_url = listener.url()
-print(f"🌐 臨時 Webhook URL: {ngrok_url}/callback")
+def create_app():
+    load_dotenv()
 
-# 設定 ngrok_url 給其他模組用
-os.environ["NGROK_URL"] = ngrok_url
+    app = Flask(__name__)
 
-# 自動設定 LINE webhook URL
+    env = os.getenv("FLASK_ENV", "production")
+    app.config.from_object(CONFIG_BY_NAME[env])
 
-configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
-with ApiClient(configuration) as api_client:
-    line_bot_api = MessagingApi(api_client)
-    line_bot_api.set_webhook_endpoint(SetWebhookEndpointRequest(
-        endpoint=f"{ngrok_url}/linebot/"
-    ))
-    print("✅ 已自動設定 LINE Webhook URL")
+    container = AppContainer()
+    container.config.from_object(app.config)
+    container.wire(modules=[sys.modules[__name__], "interfaces.linebot"])
 
-# 啟動 Flask
-app = Flask(__name__)
-register_blueprints(app)
+    app.container = container
+    app.register_blueprint(linebot.linebot_bp)
+
+    return app
+
 
 if __name__ == "__main__":
+    # 啟動 Flask 應用
+    app = create_app()
+
+    # 啟動 ngrok
+    NGROK_AUTHTOKEN = os.getenv("NGROK_AUTHTOKEN")
+    listener = ngrok.forward(PORT, authtoken=NGROK_AUTHTOKEN)
+    ngrok_url = listener.url()
+    print(f"🌐 臨時 Webhook URL: {ngrok_url}/linebot/")
+
+    # 讓其他模組也能透過 os.environ 使用這個 URL
+    os.environ["NGROK_URL"] = ngrok_url
+
+    # 自動設定 LINE Webhook
+    LINE_ACCESS_TOKEN = app.config["LINE_ACCESS_TOKEN"]
+    configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        line_bot_api.set_webhook_endpoint(SetWebhookEndpointRequest(
+            endpoint=f"{ngrok_url}/linebot/"
+        ))
+        print("✅ 已自動設定 LINE Webhook URL")
+
     app.run(port=PORT)
