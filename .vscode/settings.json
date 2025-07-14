@@ -1,16 +1,3 @@
 {
-  "python.defaultInterpreterPath": "/root/envs/chatbot-env/bin/python",
-  "python.pythonPath": "/root/envs/chatbot-env/bin/python",
-  "autopep8.interpreter": [
-    "/root/envs/chatbot-env/bin/python"
-  ],
-  "isort.interpreter": [
-    "/root/envs/chatbot-env/bin/python"
-  ],
-  "black-formatter.interpreter": [
-    "/root/envs/chatbot-env/bin/python"
-  ],
-  "pylint.interpreter": [
-    "/root/envs/chatbot-env/bin/python"
-  ]
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
 }

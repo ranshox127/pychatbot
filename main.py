@@ -9,7 +9,7 @@ from linebot.v3.messaging import (ApiClient, Configuration, MessagingApi,
 
 from config.settings import CONFIG_BY_NAME
 from containers import AppContainer
-from interfaces import linebot
+from interfaces.linebot import create_linebot_blueprint
 
 PORT = 8095
 
@@ -24,10 +24,14 @@ def create_app():
 
     container = AppContainer()
     container.config.from_object(app.config)
+
+    linebot_blueprint = create_linebot_blueprint()
+
     container.wire(modules=[sys.modules[__name__], "interfaces.linebot"])
 
+    app.register_blueprint(linebot_blueprint)
+
     app.container = container
-    app.register_blueprint(linebot.linebot_bp)
 
     return app
 
