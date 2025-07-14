@@ -1,17 +1,18 @@
 # application/registration_service.py
-from domain.student import StudentRepository
-from domain.student import Student
+from domain.student import Student, StudentRepository
 from domain.moodle_enrollment import MoodleRepository
 from domain.course import CourseRepository
+from domain.user_state import UserState, UserStateRepository
 from infrastructure.gateways.line_api_service import LineApiService
 
 
 class RegistrationService:
-    def __init__(self, student_repo: StudentRepository, course_repo: CourseRepository, moodle_repo: MoodleRepository, line_service: LineApiService):
+    def __init__(self, student_repo: StudentRepository, course_repo: CourseRepository, moodle_repo: MoodleRepository, state_repo: UserStateRepository, line_service: LineApiService):
         # 依賴注入！我們不關心是 MySQL 還是其他資料庫，只要它遵守 StudentRepository 的合約即可
         self.student_repo = student_repo
         self.course_repo = course_repo
         self.moodle_repo = moodle_repo
+        self.state_repo = state_repo
         self.line_service = line_service
 
     def handle_follow_event(self, line_user_id: str, reply_token: str):
@@ -45,9 +46,10 @@ class RegistrationService:
         if not enrollment:
             self.line_service.reply_text_message(
                 reply_token, "在教學平台上找不到這個學號，請確認後再試一次。")
-            
+
         # 3.找課程
-        enrollments = self.moodle_repo.find_student_enrollments(student_id_input)
+        enrollments = self.moodle_repo.find_student_enrollments(
+            student_id_input)
 
         in_progress_titles = {
             course.context_title for course in self.course_repo.get_in_progress_courses()}
@@ -76,8 +78,11 @@ class RegistrationService:
         # 5. 透過倉儲保存
         self.student_repo.save(new_student)
 
-        # 6. 執行註冊後的動作
-        self.line_service.switch_rich_menu_for_user(line_user_id, 'main_menu')
+        # 6. 為該學生在資料表中創建欄位
+        self.state_repo.save(UserState(line_user_id=line_user_id))
+
+        # 7. 執行註冊後的動作
+        self.line_service.link_rich_menu_to_user(line_user_id, 'main_menu')
 
         self.line_service.reply_text_message(
             reply_token, f"{new_student.name}，你好！帳號已成功綁定。")
