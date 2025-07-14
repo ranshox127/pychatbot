@@ -37,6 +37,8 @@ def create_app():
 
 
 if __name__ == "__main__":
+    # FLASK_ENV=production python main.py
+    
     # 啟動 Flask 應用
     app = create_app()
 

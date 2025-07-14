@@ -6,11 +6,6 @@ from domain.course import CourseRepository
 from infrastructure.gateways.line_api_service import LineApiService
 
 
-class RegistrationResult:
-    # ... 一個用來回傳結果的物件，可以包含成功/失敗訊息 ...
-    pass
-
-
 class RegistrationService:
     def __init__(self, student_repo: StudentRepository, course_repo: CourseRepository, moodle_repo: MoodleRepository, line_service: LineApiService):
         # 依賴注入！我們不關心是 MySQL 還是其他資料庫，只要它遵守 StudentRepository 的合約即可
@@ -29,9 +24,10 @@ class RegistrationService:
             self.line_service.switch_rich_menu_for_user(
                 line_user_id, 'main_menu')
         else:
-            self.line_service.send_registration_prompt(line_user_id)
+            self.line_service.reply_text_message(
+                reply_token, "請輸入學號以成為 Pychatbot 好友。")
 
-    def register_student(self, line_user_id: str, student_id_input: str, reply_token: str) -> RegistrationResult:
+    def register_student(self, line_user_id: str, student_id_input: str, reply_token: str) -> None:
         """
         學生輸入學號之後:
         1. 檢查學號是否已被他人綁定
@@ -40,13 +36,18 @@ class RegistrationService:
 
         # 1. 檢查學號是否已被他人綁定
         if self.student_repo.find_by_student_id(student_id_input):
-            return RegistrationResult(success=False, message="此學號已被其他 Line 帳號使用，請洽詢助教。")
+            self.line_service.reply_text_message(
+                reply_token, "此學號已被其他 Line 帳號使用，請洽詢助教。")
 
         # 2. 從教學平台驗證學號
-        enrollments = self.moodle_repo.find_student_enrollments(
+        enrollment = self.moodle_repo.find_student_info(
             student_id_input)
-        if not enrollments:
-            return RegistrationResult(success=False, message="在教學平台上找不到這個學號，請確認後再試一次。")
+        if not enrollment:
+            self.line_service.reply_text_message(
+                reply_token, "在教學平台上找不到這個學號，請確認後再試一次。")
+            
+        # 3.找課程
+        enrollments = self.moodle_repo.find_student_enrollments(student_id_input)
 
         in_progress_titles = {
             course.context_title for course in self.course_repo.get_in_progress_courses()}
@@ -58,7 +59,8 @@ class RegistrationService:
                 break  # 找到第一個匹配的進行中課程
 
         if not target_enrollment:
-            return RegistrationResult(success=False, message="你所在的課程目前未啟用 Chatbot 服務。")
+            self.line_service.reply_text_message(
+                reply_token, "你所在的課程目前未啟用 Chatbot 服務。")
 
         # 4. 建立 Student 領域物件 (業務規則封裝在內)
         new_student = Student.register(
@@ -77,4 +79,5 @@ class RegistrationService:
         # 6. 執行註冊後的動作
         self.line_service.switch_rich_menu_for_user(line_user_id, 'main_menu')
 
-        return RegistrationResult(success=True, message=f"{new_student.name}，你好！帳號已成功綁定。")
+        self.line_service.reply_text_message(
+            reply_token, f"{new_student.name}，你好！帳號已成功綁定。")

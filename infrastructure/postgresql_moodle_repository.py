@@ -75,12 +75,7 @@ class PostgreSQLMoodleRepository(MoodleRepository):
             row = cur.fetchone()
             if not row:
                 return None
-            return {
-                "user_id": row[0],
-                "student_id": row[1].split('@')[0],
-                "fullname": row[2],
-                "roleid": row[3]
-            }
+            return MoodleEnrollment(course_fullname=row[0], roleid=row[3], user_id=row[1].split('@')[0], fullname=row[2])
 
 
 class LazyMoodleConnectionManager:
