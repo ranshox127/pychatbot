@@ -1,19 +1,22 @@
 # application/registration_service.py
+from application.chatbot_logger import ChatbotLogger
 from domain.student import Student, StudentRepository
 from domain.moodle_enrollment import MoodleRepository
 from domain.course import CourseRepository
 from domain.user_state import UserState, UserStateRepository
+from domain.event_log import EventEnum
 from infrastructure.gateways.line_api_service import LineApiService
 
 
 class RegistrationService:
-    def __init__(self, student_repo: StudentRepository, course_repo: CourseRepository, moodle_repo: MoodleRepository, state_repo: UserStateRepository, line_service: LineApiService):
+    def __init__(self, student_repo: StudentRepository, course_repo: CourseRepository, moodle_repo: MoodleRepository, state_repo: UserStateRepository, line_service: LineApiService, chatbot_logger: ChatbotLogger):
         # 依賴注入！我們不關心是 MySQL 還是其他資料庫，只要它遵守 StudentRepository 的合約即可
         self.student_repo = student_repo
         self.course_repo = course_repo
         self.moodle_repo = moodle_repo
         self.state_repo = state_repo
         self.line_service = line_service
+        self.chatbot_logger = chatbot_logger
 
     def handle_follow_event(self, line_user_id: str, reply_token: str):
         """
@@ -81,7 +84,11 @@ class RegistrationService:
         # 6. 為該學生在資料表中創建欄位
         self.state_repo.save(UserState(line_user_id=line_user_id))
 
-        # 7. 執行註冊後的動作
+        # 7. 在資料庫中記錄註冊事件
+        self.chatbot_logger.log_event(student_id=new_student.student_id, event_type=EventEnum.REGISTER,
+                                      message_log_id=-1, problem_id=None, hw_id=None, context_title=new_student.context_title)
+
+        # 8. 執行註冊後的動作
         self.line_service.link_rich_menu_to_user(line_user_id, 'main_menu')
 
         self.line_service.reply_text_message(

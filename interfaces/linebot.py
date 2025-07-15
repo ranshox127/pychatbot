@@ -11,6 +11,7 @@ from application.registration_service import RegistrationService
 from application.user_state_accessor import UserStateAccessor
 from application.ask_TA_service import AskTAService
 from application.leave_service import LeaveService
+from application.chatbot_logger import ChatbotLogger
 from domain.student import StudentRepository
 from domain.user_state import UserStateEnum
 from containers import AppContainer
@@ -69,7 +70,8 @@ def create_linebot_blueprint() -> Blueprint:
         registration_service: RegistrationService = Provide[AppContainer.registration_service],
         user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
         ask_ta_service: AskTAService = Provide[AppContainer.ask_ta_service],
-        leave_service: LeaveService = Provide[AppContainer.leave_service]
+        leave_service: LeaveService = Provide[AppContainer.leave_service],
+        chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
     ):
         user_id = event.source.user_id
         text = event.message.text.strip()
@@ -92,6 +94,10 @@ def create_linebot_blueprint() -> Blueprint:
 
         # 第三層：對話狀態檢查
         # 這裡的 UserStateEnum 來自 application/state_management_service.py
+
+        message_log_id = chatbot_logger.log_message(
+            student_id=student.student_id, message=text, context_title=student.context_title)
+
         session_state = user_state_accessor.get_state(user_id).status
 
         if session_state == UserStateEnum.AWAITING_LEAVE_REASON:

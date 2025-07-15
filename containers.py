@@ -4,6 +4,8 @@ from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
 from infrastructure.mysql_student_repository import MySQLStudentRepository
 from infrastructure.mysql_course_repository import MySQLCourseRepository
 from infrastructure.postgresql_moodle_repository import PostgreSQLMoodleRepository
+from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
+from infrastructure.mysql_message_log_repository import MySQLMessageLogRepository
 from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
 
 from infrastructure.gateways.line_api_service import LineApiService
@@ -11,6 +13,7 @@ from application.registration_service import RegistrationService
 from application.user_state_accessor import UserStateAccessor
 from application.ask_TA_service import AskTAService
 from application.leave_service import LeaveService
+from application.chatbot_logger import ChatbotLogger
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -59,9 +62,16 @@ class AppContainer(containers.DeclarativeContainer):
     )
     user_state_repo = providers.Factory(
         MySQLUserStateRepository, db_config=config.DB_CONFIG)
+    message_repo = providers.Factory(
+        MySQLMessageLogRepository, db_config=config.DB_CONFIG)
+    event_repo = providers.Factory(
+        MySQLEventLogRepository, db_config=config.DB_CONFIG)
 
     # 4. Service Providers (Application)
     # The container automatically wires the dependencies together.
+    chatbot_logger = providers.Factory(
+        ChatbotLogger, message_repo=message_repo, event_repo=event_repo)
+
     user_state_accessor = providers.Factory(
         UserStateAccessor, user_state_repo=user_state_repo)
 
@@ -70,10 +80,12 @@ class AppContainer(containers.DeclarativeContainer):
         student_repo=student_repo,
         course_repo=course_repo,
         moodle_repo=moodle_repo,
-        line_service=line_api_service
+        line_service=line_api_service,
+        chatbot_logger=chatbot_logger
     )
 
     leave_service = providers.Factory(LeaveService)
 
     ask_ta_service = providers.Factory(AskTAService)
+
     # ... add other services like LeaveService here ...
