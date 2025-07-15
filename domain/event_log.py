@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
@@ -34,3 +35,10 @@ class EventLog:
     context_title: Optional[str] = None
     message_log_id: Optional[int] = None
     gai_auto_reply_status: Optional[int] = None  # 0, 1, 2 for GAI reply
+
+
+class EventLogRepository(ABC):
+
+    @abstractmethod
+    def save_event_log(self, event_log: EventLog) -> None:
+        pass
