@@ -106,7 +106,7 @@ def create_linebot_blueprint() -> Blueprint:
             return
         elif session_state == UserStateEnum.AWAITING_TA_QUESTION:
             ask_ta_service.submit_question(
-                user_id, text, event.reply_token, student)
+                user_id, message_log_id)
             return
         elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
             pass
