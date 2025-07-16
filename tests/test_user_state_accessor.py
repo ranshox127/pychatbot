@@ -6,6 +6,8 @@ from domain.user_state import UserState, UserStateEnum
 
 
 def test_get_state_returns_existing_state():
+    """
+    """
     mock_repo = MagicMock()
     mock_repo.get.return_value = UserState(
         "U123", UserStateEnum.AWAITING_TA_QUESTION)

@@ -18,7 +18,7 @@ class MySQLCourseRepository(CourseRepository):
         with self._get_linebot_db_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = """
-                SELECT context_title, mails_of_TAs, OJ_contest_title, present_url
+                SELECT context_title, mails_of_TAs, leave_notice, day_of_week, OJ_contest_title, present_url
                 FROM course_info
                 WHERE status = 'in_progress' AND reserved LIKE %s;
                 """
@@ -66,6 +66,8 @@ class MySQLCourseRepository(CourseRepository):
             context_title=row["context_title"],
             ta_emails=row["mails_of_TAs"].split(
                 ",") if row["mails_of_TAs"] else [],
+            leave_notice=row["leave_notice"],
+            day_of_week=row["day_of_week"],
             oj_contest_title=row["OJ_contest_title"],
             attendance_sheet_url=row["present_url"],
             units=[]
