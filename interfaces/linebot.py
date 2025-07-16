@@ -2,7 +2,7 @@ from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, abort, current_app, request
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import (ApiClient, ReplyMessageRequest, TextMessage)
+from linebot.v3.messaging import (ReplyMessageRequest, TextMessage)
 from linebot.v3.webhooks import (FollowEvent, MessageEvent, PostbackEvent,
                                  TextMessageContent)
 
@@ -85,16 +85,12 @@ def create_linebot_blueprint() -> Blueprint:
             return
 
         # 第二層：領域狀態檢查 (雖然在目前流程中，不存在的用戶已處理，但這是一個好的實踐)
-        # 這裡的 is_registered() 來自 domain/student.py
         if not student.is_registered():
-            # 可能處於剛加入好友但還未輸入學號的狀態
             registration_service.register_student(
                 user_id, text, event.reply_token)
             return
 
         # 第三層：對話狀態檢查
-        # 這裡的 UserStateEnum 來自 application/state_management_service.py
-
         message_log_id = chatbot_logger.log_message(
             student_id=student.student_id, message=text, context_title=student.context_title)
 
@@ -113,7 +109,7 @@ def create_linebot_blueprint() -> Blueprint:
         elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
             pass
 
-        # 3. 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
+        # 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
         if text == "助教安安，我有問題!":
             ask_ta_service.start_inquiry(
                 line_user_id=user_id, reply_token=event.reply_token)
@@ -148,47 +144,48 @@ def create_linebot_blueprint() -> Blueprint:
         + 否
 
         """
-        user_id = event.source.
+        user_id = event.source.user_id
 
         student = student_repository.find_by_line_id(user_id)
+        
+        postback_action = event.postback.data
 
         message_log_id = chatbot_logger.log_message(
-            student_id=student.student_id, message=event.postback.data, context_title=student.context_title)
+            student_id=student.student_id, message=postback_action, context_title=student.context_title)
 
-        with ApiClient(configuration) as api_client:
-            if event.postback.data == 'apply_leave':
-                leave_service.apply_for_leave(
-                    line_user_id=user_id, reply_token=event.reply_token)
-            elif event.postback.data == 'fetch_absence_info':
-                attendance_service.check_attendance(user_id)
-            elif event.postback.data == 'check_homework':
-                pass
-            elif event.postback.data == '[Action]confirm_to_leave':
-                leave_service.ask_leave_reason(
-                    line_user_id=user_id, reply_token=event.reply_token, message_log_id=message_log_id)
-            elif event.postback.data == '[Action]cancel_to_leave':
-                pass
-            elif event.postback.data == '[INFO]get_summary_grading':
-                pass
-            elif event.postback.data == '[INFO]summary_re-gradding':
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text='你剛剛點了[重新評分]')]
-                    )
+        if postback_action == 'apply_leave':
+            leave_service.apply_for_leave(
+                line_user_id=user_id, reply_token=event.reply_token)
+        elif postback_action == 'fetch_absence_info':
+            attendance_service.check_attendance(user_id)
+        elif postback_action == 'check_homework':
+            pass
+        elif postback_action == '[Action]confirm_to_leave':
+            leave_service.ask_leave_reason(
+                line_user_id=user_id, reply_token=event.reply_token, message_log_id=message_log_id)
+        elif postback_action == '[Action]cancel_to_leave':
+            pass
+        elif postback_action == '[INFO]get_summary_grading':
+            pass
+        elif postback_action == '[INFO]summary_re-gradding':
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text='你剛剛點了[重新評分]')]
                 )
-            elif event.postback.data == '[INFO]summary_re-gradding_by_TA':
-                pass
-            elif event.postback.data == '[INFO]summary_re-gradding_by_TA_check':
-                pass
-            elif event.postback.data == 'C1':
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(
-                            text='C1')]
-                    )
+            )
+        elif postback_action == '[INFO]summary_re-gradding_by_TA':
+            pass
+        elif postback_action == '[INFO]summary_re-gradding_by_TA_check':
+            pass
+        elif postback_action == 'C1':
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(
+                        text='C1')]
                 )
+            )
 
     # === 路由和處理器定義結束 ===
 
