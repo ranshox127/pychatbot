@@ -102,11 +102,11 @@ def create_linebot_blueprint() -> Blueprint:
 
         if session_state == UserStateEnum.AWAITING_LEAVE_REASON:
             leave_service.submit_leave_reason(
-                user_id, text, event.reply_token, student)
+                line_user_id=user_id, reason=text, reply_token=event.reply_token)
             return
         elif session_state == UserStateEnum.AWAITING_TA_QUESTION:
             ask_ta_service.submit_question(
-                user_id, message_log_id)
+                line_user_id=user_id, message_log_id=message_log_id)
             return
         elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
             pass
@@ -115,13 +115,19 @@ def create_linebot_blueprint() -> Blueprint:
 
         # 3. 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
         if text == "助教安安，我有問題!":
-            ask_ta_service.start_inquiry(user_id, event.reply_token)
+            ask_ta_service.start_inquiry(
+                line_user_id=user_id, reply_token=event.reply_token)
         else:
             pass
 
     @handler.add(PostbackEvent)
     @inject
-    def handle_postback(event):
+    def handle_postback(
+        event: PostbackEvent,
+        student_repository: StudentRepository = Provide[AppContainer.student_repo],
+        leave_service: LeaveService = Provide[AppContainer.leave_service],
+        chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
+    ):
         """
         main menu:
         + 請假按鈕
@@ -142,16 +148,24 @@ def create_linebot_blueprint() -> Blueprint:
         + 否
 
         """
-        user_id = event.source.user_id
+        user_id = event.source.
+
+        student = student_repository.find_by_line_id(user_id)
+
+        message_log_id = chatbot_logger.log_message(
+            student_id=student.student_id, message=event.postback.data, context_title=student.context_title)
+
         with ApiClient(configuration) as api_client:
             if event.postback.data == 'apply_leave':
-                leave_service.apply_for_leave(user_id)
+                leave_service.apply_for_leave(
+                    line_user_id=user_id, reply_token=event.reply_token)
             elif event.postback.data == 'fetch_absence_info':
                 attendance_service.check_attendance(user_id)
             elif event.postback.data == 'check_homework':
                 pass
             elif event.postback.data == '[Action]confirm_to_leave':
-                leave_service.ask_leave_reason(user_id)
+                leave_service.ask_leave_reason(
+                    line_user_id=user_id, reply_token=event.reply_token, message_log_id=message_log_id)
             elif event.postback.data == '[Action]cancel_to_leave':
                 pass
             elif event.postback.data == '[INFO]get_summary_grading':

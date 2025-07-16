@@ -6,6 +6,7 @@ from infrastructure.mysql_course_repository import MySQLCourseRepository
 from infrastructure.postgresql_moodle_repository import PostgreSQLMoodleRepository
 from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
 from infrastructure.mysql_message_log_repository import MySQLMessageLogRepository
+from infrastructure.mysql_leave_repository import MySQLLeaveRepository
 from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
 
 from infrastructure.gateways.line_api_service import LineApiService
@@ -14,6 +15,7 @@ from application.user_state_accessor import UserStateAccessor
 from application.ask_TA_service import AskTAService
 from application.leave_service import LeaveService
 from application.chatbot_logger import ChatbotLogger
+from application.mail_carrier import GmailSMTPMailCarrier
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -66,11 +68,16 @@ class AppContainer(containers.DeclarativeContainer):
         MySQLMessageLogRepository, db_config=config.DB_CONFIG)
     event_repo = providers.Factory(
         MySQLEventLogRepository, db_config=config.DB_CONFIG)
+    leave_repo = providers.Factory(
+        MySQLLeaveRepository, db_config=config.DB_CONFIG)
 
     # 4. Service Providers (Application)
     # The container automatically wires the dependencies together.
     chatbot_logger = providers.Factory(
         ChatbotLogger, message_repo=message_repo, event_repo=event_repo)
+
+    mail_carrier = providers.Factory(
+        GmailSMTPMailCarrier, send_from=config.EMAIL_SEND_FROM, password=config.EMAIL_PASSWORD)
 
     user_state_accessor = providers.Factory(
         UserStateAccessor, user_state_repo=user_state_repo)
@@ -84,8 +91,23 @@ class AppContainer(containers.DeclarativeContainer):
         chatbot_logger=chatbot_logger
     )
 
-    leave_service = providers.Factory(LeaveService)
+    leave_service = providers.Factory(
+        LeaveService,
+        student_repo=student_repo,
+        course_repo=course_repo,
+        leave_repo=leave_repo,
+        user_state_accessor=user_state_accessor,
+        line_service=line_api_service,
+        chatbot_logger=chatbot_logger,
+        mail_carrier=mail_carrier
+    )
 
-    ask_ta_service = providers.Factory(AskTAService)
+    ask_ta_service = providers.Factory(
+        AskTAService,
+        student_repo=student_repo,
+        user_state_accessor=user_state_accessor,
+        line_service=line_api_service,
+        chatbot_logger=chatbot_logger
+    )
 
     # ... add other services like LeaveService here ...

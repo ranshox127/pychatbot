@@ -1,61 +1,83 @@
-class LeaveService:
-    def __init__(self):
-        pass
-    
-    def apply_for_leave(self, user_id: str):
-        pass
-        # student = self.student_repo.find_by_line_id(user_id)
-        # course = self.course_repo.get_course(student.context_title)
-        # next_course_date = course.get_next_course_date()
-        # self.line_service
-        # 1. get the student
-        # 2. get the next class date
-        # 3. send the ConfirmTemplate
-        
-        # confirm_template = ConfirmTemplate(
-        #     text='同學你好，請問你是否確定要請假?',
-        #     actions=[
-        #         PostbackAction(label='是', data='[Action]Ask_for_leave'),
-        #         PostbackAction(label='否', data='[Action]')
-        #     ]
-        # )
-        # template_message = TemplateMessage(
-        #     alt_text='Confirm alt text',
-        #     template=confirm_template
-        # )
+from application.chatbot_logger import ChatbotLogger
+from application.mail_carrier import MailCarrier, LeaveEmailContent
+from application.user_state_accessor import UserStateAccessor
+from domain.course import CourseRepository
+from domain.event_log import EventEnum
+from domain.leave_request import LeaveRequest, LeaveRequestRepository
+from domain.student import StudentRepository
+from domain.user_state import UserStateEnum
+from infrastructure.gateways.line_api_service import LineApiService
+from interfaces.message_builders.leave_builders import LeaveConfirmationBuilder
 
-        # line_bot_api.reply_message(
-        #     ReplyMessageRequest(
-        #         reply_token=event.reply_token,
-        #         messages=[template_message]
-        #     )
-        # )
-        
-    def ask_leave_reason(self, user_id: str):
-        pass
-        # student = self.student_repo.find_by_line_id(user_id)
-        # self.state_manager.set_state(user_id, UserStateEnum.AWAITING_LEAVE_REASON)
-        # self.line_service
-        # 1. get the student
-        # 2. change the student's state to AWAITING_LEAVE_REASON
-        # 3. send the text message to the student
-        
-        # f'{name}，你好，收到你的請假要求了，想請問請假的原因是甚麼呢?(請在一條訊息中進行說明)'
-        
-    def submit_leave_reason(self, student, reason):
-        pass
-        # student = self.student_repo.find_by_line_id(user_id)
-        # self.state_manager.set_state(user_id, UserStateEnum.IDLE)
-        # self.event_repo.save_event()
-        
-        # course = self.course_repo.get_course(student.context_title)
-        # next_course_date = course.get_next_course_date()
-        # self.leave_repo
-        # self.line_service
-        # self.mail_carrier
-        
-        # 1. get the student
-        # 2. change the student's state to IDLE
-        # 3. save the record to the database
-        # 4. inform TAs the student's leave reason
-        # 5. send a confirmation message to the student
+
+class LeaveService:
+    def __init__(self, student_repo: StudentRepository,
+                 course_repo: CourseRepository,
+                 leave_repo: LeaveRequestRepository,
+                 user_state_accessor: UserStateAccessor,
+                 line_service: LineApiService,
+                 chatbot_logger: ChatbotLogger,
+                 mail_carrier: MailCarrier):
+        self.student_repo = student_repo
+        self.course_repo = course_repo
+        self.leave_repo = leave_repo
+        self.user_state_accessor = user_state_accessor
+        self.line_service = line_service
+        self.chatbot_logger = chatbot_logger
+        self.mail_carrier = mail_carrier
+
+    def apply_for_leave(self, line_user_id: str, reply_token: str):
+        student = self.student_repo.find_by_line_id(line_user_id)
+
+        course = self.course_repo.get_course_shell(student.context_title)
+        next_course_date = course.get_next_course_date()
+
+        message_builder = LeaveConfirmationBuilder(
+            next_class_date=next_course_date)
+        message_to_send = message_builder.build()
+        self.line_service.reply_message(
+            reply_token=reply_token, messages=[message_to_send])
+
+    def ask_leave_reason(self, line_user_id: str, reply_token: str, message_log_id: str):
+        student = self.student_repo.find_by_line_id(line_user_id)
+
+        self.chatbot_logger.log_event(student_id=student.student_id, event_type=EventEnum.ASK_FOR_LEAVE,
+                                      message_log_id=message_log_id, problem_id=None, hw_id=None, context_title=student.context_title)
+
+        self.user_state_accessor.set_state(
+            student.line_user_id, UserStateEnum.AWAITING_LEAVE_REASON)
+
+        self.line_service.reply_text_message(
+            reply_token=reply_token, text=f"{student.name}，你好，收到你的請假要求了，想請問請假的原因是甚麼呢?(請在一條訊息中進行說明)")
+
+    def submit_leave_reason(self, line_user_id: str, reason: str, reply_token: str):
+        student = self.student_repo.find_by_line_id(line_user_id)
+        self.user_state_accessor.set_state(
+            student.line_user_id, UserStateEnum.IDLE)
+
+        course = self.course_repo.get_course_shell(student.context_title)
+        next_course_date = course.get_next_course_date()
+
+        leave_request = LeaveRequest(
+            operation_time=self._now_string(),
+            student_id=student.student_id,
+            student_name=student.name,
+            apply_time=next_course_date,
+            reason=reason,
+            context_title=student.context_title
+        )
+
+        result = self.leave_repo.save_leave_request(leave_request)
+
+        self.line_service.reply_text_message(reply_token, result)
+
+        if course.leave_notice and result == "收到，已經幫你請好假了。":
+            self.mail_carrier.send_email(
+                to=course.ta_emails, content=LeaveEmailContent(leave_request))
+
+    def _now_string(self) -> str:
+        """
+        需測試。
+        """
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
