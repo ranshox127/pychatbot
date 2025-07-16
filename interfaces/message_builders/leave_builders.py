@@ -14,7 +14,7 @@ class LeaveConfirmationBuilder(MessageBuilder):
 
     def build(self) -> Message:
         confirm_template = ConfirmTemplate(
-            text=f'同學你好，請問你是否確定要在 {self.next_class_date} 請假？',
+            text=f'同學你好，請問你是否確定要在 {self.next_class_date} 請假?',
             actions=[
                 PostbackAction(label='是', data='action:confirm_leave'),
                 PostbackAction(label='否', data='action:cancel_leave')

@@ -1,10 +1,18 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
 @dataclass
 class LeaveRequest:
-    context_title: str
+    operation_time: str
     student_id: str
-    leave_date: str
+    student_name: str
+    apply_time: str
     reason: str
-    request_time: str
+    context_title: str
+
+
+class LeaveRequestRepository(ABC):
+    @abstractmethod
+    def save_leave_request(self, leave: LeaveRequest) -> str:
+        pass
