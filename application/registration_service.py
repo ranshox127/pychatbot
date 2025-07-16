@@ -9,7 +9,12 @@ from infrastructure.gateways.line_api_service import LineApiService
 
 
 class RegistrationService:
-    def __init__(self, student_repo: StudentRepository, course_repo: CourseRepository, moodle_repo: MoodleRepository, state_repo: UserStateRepository, line_service: LineApiService, chatbot_logger: ChatbotLogger):
+    def __init__(self, student_repo: StudentRepository,
+                 course_repo: CourseRepository,
+                 moodle_repo: MoodleRepository,
+                 state_repo: UserStateRepository,
+                 line_service: LineApiService,
+                 chatbot_logger: ChatbotLogger):
         # 依賴注入！我們不關心是 MySQL 還是其他資料庫，只要它遵守 StudentRepository 的合約即可
         self.student_repo = student_repo
         self.course_repo = course_repo
@@ -25,11 +30,10 @@ class RegistrationService:
         """
         student = self.student_repo.find_by_line_id(line_user_id)
         if student and student.is_registered():
-            self.line_service.switch_rich_menu_for_user(
-                line_user_id, 'main_menu')
+            self.line_service.link_rich_menu_to_user(line_user_id, 'main_menu')
         else:
             self.line_service.reply_text_message(
-                reply_token, "請輸入學號以成為 Pychatbot 好友。")
+                reply_token, "請輸入學號，再開始交談喔，感謝你!")
 
     def register_student(self, line_user_id: str, student_id_input: str, reply_token: str) -> None:
         """
@@ -92,4 +96,4 @@ class RegistrationService:
         self.line_service.link_rich_menu_to_user(line_user_id, 'main_menu')
 
         self.line_service.reply_text_message(
-            reply_token, f"{new_student.name}，你好！帳號已成功綁定。")
+            reply_token, f"{new_student.name}，很高興認識你! 你目前被綁定的課程為: {new_student.context_title}，如果名字或課程有誤請找助教反應。")
