@@ -106,6 +106,13 @@ class ScoreAggregator:
         return f'{OJ_all_submission} / {OJ_all_problem}'
 
     def _get_summary_score(self, context_title, contents_name, stdID, deadline):
+        """
+        1. 取得學生提交的總結 id
+        2. 是否還沒被 review
+        3. 如果在 deadline 前繳交，並且 result = 1，分數為 100
+        4. 如果在 deadline 前繳交，並且 result = 0、penalty != -1，分數為 80
+        5. 除此之外 0 分
+        """
         log_id = self.summary_repo.get_latest_log_id(
             stdID, context_title, contents_name)
         if not log_id:
