@@ -1,82 +1,83 @@
+from application.chatbot_logger import ChatbotLogger
+from application.user_state_accessor import UserStateAccessor
+from domain.course import CourseRepository
+from domain.event_log import EventEnum
+from domain.score import ScoreAggregator, ScoreReport
+from domain.student import StudentRepository
+from domain.user_state import UserStateEnum
+from infrastructure.gateways.line_api_service import LineApiService
+
+
 class CheckScoreService:
-    def __init__(self):
-        pass
+    def __init__(self, student_repo: StudentRepository,
+                 course_repo: CourseRepository,
+                 user_state_accessor: UserStateAccessor,
+                 score_aggregator: ScoreAggregator,
+                 line_service: LineApiService,
+                 chatbot_logger: ChatbotLogger
+                 ):
+        self.student_repo = student_repo
+        self.course_repo = course_repo
+        self.user_state_accessor = user_state_accessor
+        self.score_aggregator = score_aggregator
+        self.line_service = line_service
+        self.chatbot_logger = chatbot_logger
 
-    def check_publish_contents(self):
-        pass
-        # student = self.student_repo.find_by_line_id(user_id)
-        # course = self.course_repo.get_course()
-        # if course.publish_contents == []:
-        #    self.line_service
-        #    return
-        # self.line_service
-        # self.state_manager.set_state(user_id, UserStateEnum.AWAITING_CONTENTS_NAME)
+    def check_publish_contents(self, line_user_id: str, reply_token: str):
+        student = self.student_repo.find_by_line_id(line_user_id)
+        course = self.course_repo.get_course_shell(student.context_title)
+        course = self.course_repo.populate_units(course)
 
-    def check_score(self):
-        pass
-        # student = self.student_repo.find_by_line_id(user_id)
-        # course = self.course_repo.get_course()
-        # if target_content not in course.publish_contents:
-        #    self.line_service
-        #    return
+        if course.units == []:
+            self.line_service.reply_text_message(
+                reply_token=reply_token, text="目前還沒有任何要繳交的作業喔。")
+            return
 
-        # OJ_info = self.OJ_repo.get_OJ_info(student, course, target_content)
-        # mistake_review_value = self._get_mistake_review_value()
-        # self.line_service
+        unit_names = [unit.name for unit in course.units]
+        unit_list_text = ', '.join(unit_names)
 
-    def _get_mistake_review_value(self, stdID: str, contents_name: str):
-        """
-        查詢指定學生在某單元（週次）的錯誤回顧成績。
+        self.line_service.reply_text_message(
+            reply_token=reply_token, text=f"請輸入要查詢的單元。(ex. {unit_list_text})")
 
-        此函式從 Google Sheets 讀取學生成績數據，根據姓名 `name` 和單元 `contents_name`
-        查找對應的錯誤回顧成績，並返回三種可能的結果：
-        - 0: 錯誤回顧成績為 0
-        - 100: 錯誤回顧成績為 100
-        - "無成績": 該欄位數值非 0 或 100，通常代表成績尚未計算完成
-        - "沒有找到對應的欄位": 若找不到與 `contents_name` 對應的欄位
+        self.user_state_accessor.set_state(
+            line_user_id, UserStateEnum.AWAITING_CONTENTS_NAME)
 
-        參數:
-        - stdID (str): 學號
-        - contents_name (str): 目標單元名稱（如 'C1', 'C8'）
+    def check_score(self, line_user_id: str, reply_token: str, target_content: str, message_log_id: int):
+        student = self.student_repo.find_by_line_id(line_user_id)
+        course = self.course_repo.get_course_shell(student.context_title)
+        course = self.course_repo.populate_units(course)
 
-        回傳:
-        - int: 0 或 100，代表錯誤回顧成績
-        - str: "無成績" 或 "沒有找到對應的欄位"
+        unit_names = [unit.name for unit in course.units]
 
-        例外處理:
-        - 若 `sheet_url` 無效，會輸出 "無效的 Google Sheets 連結"
+        if target_content not in unit_names:
+            self.line_service.reply_text_message(
+                reply_token=reply_token, text="請單元名稱不存在，請確認後再重新查詢喔。")
+            return
 
-        範例:
-        >>> get_mistake_review_value("jz1452896", "C1")
-        100
+        try:
+            report = self.score_aggregator.aggregate(
+                student=student, course=course, unit_name=target_content)
+        except ScoreAggregationFailed:
+            self.line_service.reply_text_message(
+                reply_token=reply_token,
+                text="很抱歉，目前系統故障，請稍後再試。"
+            )
+            return
 
-        >>> get_mistake_review_value("108504510", "C8")
-        "無成績"
+        message = self._format_score_report(report)
+        self.line_service.reply_text_message(
+            reply_token=reply_token, text=message)
 
-        >>> get_mistake_review_value("123456789", "C5")
-        "沒有找到對應的欄位"
-        """
-        sheet_url = 'https://docs.google.com/spreadsheets/d/1izTp3WSSdTGxd3Ul65qWU3rwujLTMuE0PIP3rxllvuY/edit?gid=576676265#gid=576676265'
+        self.user_state_accessor.set_state(line_user_id, UserStateEnum.IDLE)
 
-        sheet_id_match = re.search(
-            r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
-        gid_match = re.search(r"gid=([0-9]+)", sheet_url)
+        self.chatbot_logger.log_event(student_id=student.student_id, event_type=EventEnum.CHECK_HOMEWORK,
+                                      message_log_id=message_log_id, problem_id=None, hw_id=target_content, context_title=student.context_title)
 
-        if not (sheet_id_match and gid_match):
-            print("無效的 Google Sheets 連結")
-
-        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id_match.group(1)}/export?format=csv&gid={gid_match.group(1)}"
-        df = pd.read_csv(csv_url)
-
-        # 找到包含 contents_name 的欄位
-        matched_columns = [col for col in df.iloc[:,
-                                                  4:].columns if f"({contents_name})" in col]
-
-        # 回傳對應數據
-        if matched_columns:
-            value = df.loc[df['id'] == stdID, matched_columns].values
-            if value[0][0] == 0 or value[0][0] == 100:
-                return value[0][0]
-            else:
-                return "無成績"
-        return "沒有找到對應的欄位"
+    def _format_score_report(self, report: ScoreReport) -> str:
+        return (
+            f"同學你好，以下是你的 {report.contents_name} 作業成績：\n"
+            f"OJ Exercise(完成題數): {report.oj_exercise_score}\n"
+            f"OJ Advance(完成題數): {report.oj_advance_score}\n"
+            f"總結概念成績: {report.summary_score}\n"
+            f"錯誤回顧成績: {report.mistake_review_score}"
+        )
