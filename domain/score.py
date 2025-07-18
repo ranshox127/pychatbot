@@ -38,7 +38,7 @@ class OnlinejudgeRepository(ABC):
 
 class SummaryRepository(ABC):
     @abstractmethod
-    def get_latest_log_id(self, std_id: str, context_title: str,
+    def get_latest_log_id(self, stdID: str, context_title: str,
                           contents_name: str) -> Optional[int]:
         pass
 
@@ -47,7 +47,7 @@ class SummaryRepository(ABC):
         pass
 
     @abstractmethod
-    def get_score_result(self, std_id: str, context_title: str,
+    def get_score_result(self, stdID: str, context_title: str,
                          contents_name: str, deadline: str) -> Optional[int]:
         pass
 
@@ -188,3 +188,8 @@ class ScoreAggregator:
             else:
                 return "無成績"
         return "沒有找到對應的欄位"
+
+
+class ScoreAggregationFailed(Exception):
+    """在彙總成績過程中出現錯誤時丟出的例外。"""
+    pass

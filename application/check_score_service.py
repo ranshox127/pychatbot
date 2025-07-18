@@ -2,7 +2,7 @@ from application.chatbot_logger import ChatbotLogger
 from application.user_state_accessor import UserStateAccessor
 from domain.course import CourseRepository
 from domain.event_log import EventEnum
-from domain.score import ScoreAggregator, ScoreReport
+from domain.score import ScoreAggregator, ScoreReport, ScoreAggregationFailed
 from domain.student import StudentRepository
 from domain.user_state import UserStateEnum
 from infrastructure.gateways.line_api_service import LineApiService
