@@ -8,11 +8,16 @@ from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
 from infrastructure.mysql_message_log_repository import MySQLMessageLogRepository
 from infrastructure.mysql_leave_repository import MySQLLeaveRepository
 from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
+from infrastructure.postgresql_onlinejudge_repository import PostgreSQLOnlinejudgeRepository
+from infrastructure.mysql_summary_repository import MySQLSummaryRepository
 
 from infrastructure.gateways.line_api_service import LineApiService
+from domain.score import ScoreAggregator
 from application.registration_service import RegistrationService
 from application.user_state_accessor import UserStateAccessor
 from application.ask_TA_service import AskTAService
+from application.check_attendance_service import CheckAttendanceService
+from application.check_score_service import CheckScoreService
 from application.leave_service import LeaveService
 from application.chatbot_logger import ChatbotLogger
 from application.mail_carrier import GmailSMTPMailCarrier
@@ -70,6 +75,10 @@ class AppContainer(containers.DeclarativeContainer):
         MySQLEventLogRepository, db_config=config.DB_CONFIG)
     leave_repo = providers.Factory(
         MySQLLeaveRepository, db_config=config.DB_CONFIG)
+    oj_repo = providers.Factory(
+        PostgreSQLOnlinejudgeRepository, db_config=config.DB_CONFIG, ssh_config=config.SSH_CONFIG)
+    summary_repo = providers.Factory(
+        MySQLSummaryRepository, db_config=config.DB_CONFIG)
 
     # 4. Service Providers (Application)
     # The container automatically wires the dependencies together.
@@ -81,6 +90,9 @@ class AppContainer(containers.DeclarativeContainer):
 
     user_state_accessor = providers.Factory(
         UserStateAccessor, user_state_repo=user_state_repo)
+
+    score_aggregator = providers.Factory(
+        ScoreAggregator, oj_repo=oj_repo, summary_repo=summary_repo)
 
     registration_service = providers.Factory(
         RegistrationService,
@@ -106,6 +118,24 @@ class AppContainer(containers.DeclarativeContainer):
         AskTAService,
         student_repo=student_repo,
         user_state_accessor=user_state_accessor,
+        line_service=line_api_service,
+        chatbot_logger=chatbot_logger
+    )
+
+    check_attendance_service = providers.Factory(
+        CheckAttendanceService,
+        student_repo=student_repo,
+        course_repo=course_repo,
+        line_service=line_api_service,
+        chatbot_logger=chatbot_logger
+    )
+
+    check_score_service = providers.Factory(
+        CheckScoreService,
+        student_repo=student_repo,
+        course_repo=course_repo,
+        user_state_accessor=user_state_accessor,
+        score_aggregator=score_aggregator,
         line_service=line_api_service,
         chatbot_logger=chatbot_logger
     )

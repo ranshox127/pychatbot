@@ -11,6 +11,8 @@ from application.registration_service import RegistrationService
 from application.user_state_accessor import UserStateAccessor
 from application.ask_TA_service import AskTAService
 from application.leave_service import LeaveService
+from application.check_attendance_service import CheckAttendanceService
+from application.check_score_service import CheckScoreService
 from application.chatbot_logger import ChatbotLogger
 from domain.student import StudentRepository
 from domain.user_state import UserStateEnum
@@ -70,6 +72,7 @@ def create_linebot_blueprint() -> Blueprint:
         registration_service: RegistrationService = Provide[AppContainer.registration_service],
         user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
         ask_ta_service: AskTAService = Provide[AppContainer.ask_ta_service],
+        check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
         leave_service: LeaveService = Provide[AppContainer.leave_service],
         chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
     ):
@@ -105,7 +108,8 @@ def create_linebot_blueprint() -> Blueprint:
                 line_user_id=user_id, message_log_id=message_log_id)
             return
         elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
-            pass
+            check_score_service.check_score(
+                line_user_id=user_id, reply_token=event.reply_token, target_content=text, message_log_id=message_log_id)
         elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
             pass
 
@@ -121,6 +125,9 @@ def create_linebot_blueprint() -> Blueprint:
     def handle_postback(
         event: PostbackEvent,
         student_repository: StudentRepository = Provide[AppContainer.student_repo],
+        check_attendance_service: CheckAttendanceService = Provide[
+            AppContainer.check_attendance_service],
+        check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
         leave_service: LeaveService = Provide[AppContainer.leave_service],
         chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
     ):
@@ -147,7 +154,7 @@ def create_linebot_blueprint() -> Blueprint:
         user_id = event.source.user_id
 
         student = student_repository.find_by_line_id(user_id)
-        
+
         postback_action = event.postback.data
 
         message_log_id = chatbot_logger.log_message(
@@ -156,10 +163,15 @@ def create_linebot_blueprint() -> Blueprint:
         if postback_action == 'apply_leave':
             leave_service.apply_for_leave(
                 line_user_id=user_id, reply_token=event.reply_token)
+
         elif postback_action == 'fetch_absence_info':
-            attendance_service.check_attendance(user_id)
+            check_attendance_service.check_attendance(
+                line_user_id=user_id, reply_token=event.reply_token)
+
         elif postback_action == 'check_homework':
-            pass
+            check_score_service.check_publish_contents(
+                line_user_id=user_id, reply_token=event.reply_token)
+
         elif postback_action == '[Action]confirm_to_leave':
             leave_service.ask_leave_reason(
                 line_user_id=user_id, reply_token=event.reply_token, message_log_id=message_log_id)
