@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import pymysql
 
 from domain.course import Course, CourseRepository, CourseUnit, DeadlinesVO
@@ -38,7 +40,7 @@ class MySQLCourseRepository(CourseRepository):
         with self._get_rs_db_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = '''
-                    SELECT contents_name
+                    SELECT contents_name, start_time
                     FROM review_system.review_publish
                     WHERE context_title = %s
                     AND publish_flag = 1;
@@ -48,15 +50,34 @@ class MySQLCourseRepository(CourseRepository):
 
                 units = []
                 for row in rows:
-                    # or row['contents_name'] if using DictCursor
-                    contents_name = row[0]
+                    contents_name = row['contents_name']
                     unit_name = contents_name.split('_')[0]
-                    unit = CourseUnit(
-                        name=unit_name,
-                        deadlines=DeadlinesVO(
-                            oj_d1=6, summary_d1=7)  # 可依照需要填入預設值
+                    start_time = row['start_time']  # "%Y-%m-%d %H:%M:%S"
+
+                    # 查詢自訂 deadline（天數）
+                    query_dl = '''
+                        SELECT OJ_D1, Summary_D1
+                        FROM review_system.change_homework_deadline
+                        WHERE context_title = %s AND contents_name = %s
+                    '''
+                    cur.execute(
+                        query_dl, (course.context_title, contents_name))
+                    dl_row = cur.fetchone()
+
+                    # 決定延後幾天
+                    oj_days = dl_row['OJ_D1'] if dl_row else 6
+                    summary_days = dl_row['Summary_D1'] if dl_row else 7
+
+                    deadlines = DeadlinesVO(
+                        oj_d1=self._date_add(
+                            base=start_time, days=oj_days, hour="04:01:00"),
+                        summary_d1=self._date_add(
+                            base=start_time, days=summary_days, hour="12:01:00")
                     )
+
+                    unit = CourseUnit(name=unit_name, deadlines=deadlines)
                     units.append(unit)
+
                 course.units = units
 
         return course
@@ -72,3 +93,8 @@ class MySQLCourseRepository(CourseRepository):
             attendance_sheet_url=row["present_url"],
             units=[]
         )
+
+    def _date_add(self, base: str, days: int, hour: str) -> str:
+        dt = datetime.strptime(
+            base, "%Y-%m-%d %H:%M:%S") + timedelta(days=days)
+        return dt.strftime(f"%Y-%m-%d {hour}")

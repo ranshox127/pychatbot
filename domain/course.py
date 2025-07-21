@@ -7,15 +7,20 @@ from datetime import date, timedelta
 
 @dataclass
 class DeadlinesVO:  # Value Object
-    oj_d1: int
-    summary_d1: int
-    # ... 其他 deadline 欄位
+    oj_d1: str
+    summary_d1: str
 
 
 @dataclass
 class CourseUnit:  # Entity (within Course Aggregate)
     name: str
     deadlines: DeadlinesVO
+
+    def get_homework_deadlines(self, base_date: date) -> dict:
+        return {
+            "oj": (base_date + timedelta(days=self.deadlines.oj_d1)).strftime("%Y-%m-%d 04:01:00"),
+            "summary": (base_date + timedelta(days=self.deadlines.summary_d1)).strftime("%Y-%m-%d 12:01:00")
+        }
 
 
 class DayOfWeek(Enum):
