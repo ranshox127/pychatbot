@@ -1,0 +1,5 @@
+__pycache__/
+nohup.out
+flask_production.log
+quick_check.py
+.env
