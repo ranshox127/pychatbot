@@ -54,31 +54,45 @@ class AppContainer(containers.DeclarativeContainer):
     # 3. Repository Providers (Infrastructure)
     student_repo = providers.Factory(
         MySQLStudentRepository,
-        db_config=config.DB_CONFIG
+        db_config=config.LINEBOT_DB_CONFIG
     )
     course_repo = providers.Factory(
         MySQLCourseRepository,
-        # Assume you combine configs or pass them separately
-        linebot_db_config=config.DB_CONFIG,
-        rs_db_config=config.DB_CONFIG
+        linebot_db_config=config.LINEBOT_DB_CONFIG,
+        rs_db_config=config.REVIEW_SYSTEM_DB_CONFIG
     )
-    moodle_repo = providers.Factory(
-        PostgreSQLMoodleRepository,
-        db_config=config.DB_CONFIG,
-        ssh_config=config.SSH_CONFIG
+    message_repo = providers.Factory(
+        MySQLMessageLogRepository,
+        db_config=config.LINEBOT_DB_CONFIG
+    )
+    event_repo = providers.Factory(
+        MySQLEventLogRepository,
+        db_config=config.LINEBOT_DB_CONFIG
+    )
+    leave_repo = providers.Factory(
+        MySQLLeaveRepository,
+        db_config=config.LINEBOT_DB_CONFIG
+    )
+    summary_repo = providers.Factory(
+        MySQLSummaryRepository,
+        linebot_db_config=config.LINEBOT_DB_CONFIG,
+        verify_db_config=config.VERIFY_DB_CONFIG
     )
     user_state_repo = providers.Factory(
-        MySQLUserStateRepository, db_config=config.DB_CONFIG)
-    message_repo = providers.Factory(
-        MySQLMessageLogRepository, db_config=config.DB_CONFIG)
-    event_repo = providers.Factory(
-        MySQLEventLogRepository, db_config=config.DB_CONFIG)
-    leave_repo = providers.Factory(
-        MySQLLeaveRepository, db_config=config.DB_CONFIG)
+        MySQLUserStateRepository,
+        db_config=config.LINEBOT_DB_CONFIG
+    )
+
+    moodle_repo = providers.Factory(
+        PostgreSQLMoodleRepository,
+        db_config=config.MOODLE_DB_CONFIG,
+        ssh_config=config.MOODLE_SSH_CONFIG
+    )
     oj_repo = providers.Factory(
-        PostgreSQLOnlinejudgeRepository, db_config=config.DB_CONFIG, ssh_config=config.SSH_CONFIG)
-    summary_repo = providers.Factory(
-        MySQLSummaryRepository, db_config=config.DB_CONFIG)
+        PostgreSQLOnlinejudgeRepository,
+        db_config=config.OJ_DB_CONFIG,
+        ssh_config=config.OJ_SSH_CONFIG
+    )
 
     # 4. Service Providers (Application)
     # The container automatically wires the dependencies together.
