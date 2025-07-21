@@ -11,11 +11,13 @@ from config.settings import CONFIG_BY_NAME
 from containers import AppContainer
 from interfaces.linebot import create_linebot_blueprint
 
-PORT = 8095
+DEV_PORT = 8095
+PROD_PORT = 8096
 
 
 def create_app():
-    load_dotenv()
+    if os.getenv("FLASK_ENV", "production") != "production":
+        load_dotenv()
 
     app = Flask(__name__)
 
@@ -36,29 +38,45 @@ def create_app():
     return app
 
 
+def set_webhook(token: str, endpoint: str):
+    configuration = Configuration(access_token=token)
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        line_bot_api.set_webhook_endpoint(
+            SetWebhookEndpointRequest(endpoint=endpoint))
+        print(f"✅ 已自動設定 LINE Webhook URL 為 {endpoint}")
+
+
 if __name__ == "__main__":
     # FLASK_ENV=production python main.py
-    
+
     # 啟動 Flask 應用
     app = create_app()
 
-    # 啟動 ngrok
-    NGROK_AUTHTOKEN = os.getenv("NGROK_AUTHTOKEN")
-    listener = ngrok.forward(PORT, authtoken=NGROK_AUTHTOKEN)
-    ngrok_url = listener.url()
-    print(f"🌐 臨時 Webhook URL: {ngrok_url}/linebot/")
+    if app.config.get("FLASK_DEBUG"):
 
-    # 讓其他模組也能透過 os.environ 使用這個 URL
-    os.environ["NGROK_URL"] = ngrok_url
+        NGROK_AUTHTOKEN = os.getenv("NGROK_AUTHTOKEN")
+        listener = ngrok.forward(DEV_PORT, authtoken=NGROK_AUTHTOKEN)
+        ngrok_url = listener.url()
 
-    # 自動設定 LINE Webhook
-    LINE_ACCESS_TOKEN = app.config["LINE_ACCESS_TOKEN"]
-    configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.set_webhook_endpoint(SetWebhookEndpointRequest(
-            endpoint=f"{ngrok_url}/linebot/"
-        ))
-        print("✅ 已自動設定 LINE Webhook URL")
+        # 讓其他模組也能透過 os.environ 使用這個 URL
+        os.environ["NGROK_URL"] = ngrok_url
 
-    app.run(port=PORT)
+        # 自動設定 LINE Webhook
+        DEV_LINE_TOKEN = app.config["DEV_LINE_TOKEN"]
+
+        set_webhook(token=DEV_LINE_TOKEN, endpoint=f"{ngrok_url}/linebot/")
+
+        app.run(port=DEV_PORT)
+
+    else:
+        # Production 模式 (由 Gunicorn 啟動)
+        print("🌍 正在啟動 Production 模式...")
+        print("   建議使用 Gunicorn 搭配 Nginx，不直接用 Flask 啟動")
+
+        PROD_LINE_TOKEN = app.config["PROD_LINE_TOKEN"]
+
+        set_webhook(token=PROD_LINE_TOKEN, endpoint=os.getenv("WEBHOOK_URL"))
+
+        app.run(host="0.0.0.0", port=PROD_PORT, ssl_context=(
+            '/etc/letsencrypt/live/chatbot.moocs.tw/fullchain.pem', '/etc/letsencrypt/live/chatbot.moocs.tw/privkey.pem'))
