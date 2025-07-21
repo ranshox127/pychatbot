@@ -5,36 +5,27 @@ from domain.score import OnlinejudgeRepository
 
 
 class PostgreSQLOnlinejudgeRepository(OnlinejudgeRepository):
-    def __init__(self, ssh_host: str, ssh_user: str, ssh_password: str,
-                 db_user: str, db_password: str, db_name: str, ssh_port: int = 22, db_port: int = 5432):
-        self.ssh_host = ssh_host
-        self.ssh_user = ssh_user
-        self.ssh_password = ssh_password
-
-        self.db_user = db_user
-        self.db_password = db_password
-        self.db_name = db_name
-
-        self.ssh_port = ssh_port
-        self.db_port = db_port
+    def __init__(self, db_config: dict, ssh_config: dict):
+        self.db_config = db_config
+        self.ssh_config = ssh_config
 
     def _get_connection(self):
         tunnel = SSHTunnelForwarder(
-            (self.ssh_host, self.ssh_port),
-            ssh_username=self.ssh_user,
-            ssh_password=self.ssh_password,
-            remote_bind_address=('127.0.0.1', self.db_port)
+            (self.ssh_config['ssh_host'], self.ssh_config.get('ssh_port', 22)),
+            ssh_username=self.ssh_config['ssh_username'],
+            ssh_password=self.ssh_config['ssh_password'],
+            remote_bind_address=(
+                self.db_config['host'], self.db_config['port'])
         )
         tunnel.start()
 
         conn = psycopg2.connect(
-            host='127.0.0.1',
+            host="127.0.0.1",
             port=tunnel.local_bind_port,
-            user=self.db_user,
-            password=self.db_password,
-            database=self.db_name
+            user=self.db_config['user'],
+            password=self.db_config['password'],
+            database=self.db_config['database']
         )
-
         return tunnel, conn
 
     def _count_problem_by_type(self, oj_contest_title, contents_name, type_suffix, q_type):

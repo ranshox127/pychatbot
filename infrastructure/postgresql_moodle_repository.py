@@ -105,15 +105,16 @@ class LazyMoodleConnectionManager:
         import psycopg2
         try:
             self._tunnel = SSHTunnelForwarder(
-                (self.ssh_config['host'], self.ssh_config.get('port', 22)),
-                ssh_username=self.ssh_config['username'],
-                ssh_password=self.ssh_config['password'],
+                (self.ssh_config['ssh_host'],
+                 self.ssh_config.get('ssh_port', 22)),
+                ssh_username=self.ssh_config['ssh_username'],
+                ssh_password=self.ssh_config['ssh_password'],
                 remote_bind_address=(
                     self.db_config['host'], self.db_config['port'])
             )
             self._tunnel.start()
             self._conn = psycopg2.connect(
-                host='127.0.0.1',
+                host="127.0.0.1",
                 port=self._tunnel.local_bind_port,
                 database=self.db_config['database'],
                 user=self.db_config['user'],
