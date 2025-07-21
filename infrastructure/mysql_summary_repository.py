@@ -6,14 +6,18 @@ from domain.score import SummaryRepository
 
 
 class MySQLSummaryRepository(SummaryRepository):
-    def __init__(self, db_config: dict):
-        self.db_config = db_config
+    def __init__(self, linebot_db_config: dict, verify_config: dict):
+        self.linebot_db_config = linebot_db_config
+        self.verify_db_config = verify_config
 
-    def _get_connection(self):
-        return pymysql.connect(**self.db_config)
+    def _get_linebot_db_connection(self):
+        return pymysql.connect(**self.linebot_db_config)
+
+    def _get_verify_db_connection(self):
+        return pymysql.connect(**self.verify_db_config)
 
     def get_latest_log_id(self, stdID: str, context_title: str, contents_name: str) -> Optional[int]:
-        with self._get_connection() as conn:
+        with self._get_linebot_db_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = '''
                 SELECT log_id
@@ -27,7 +31,7 @@ class MySQLSummaryRepository(SummaryRepository):
                 return row["log_id"] if row else None
 
     def is_log_under_review(self, log_id: int) -> bool:
-        with self._get_connection() as conn:
+        with self._get_verify_db_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = '''
                 SELECT COUNT(*)
@@ -44,7 +48,7 @@ class MySQLSummaryRepository(SummaryRepository):
 
     def get_score_result(self, stdID: str, context_title: str,
                          contents_name: str, deadline: str) -> Optional[int]:
-        with self._get_connection() as conn:
+        with self._get_linebot_db_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 # 第一層：result = 1 => 100 分
                 query_100 = '''
