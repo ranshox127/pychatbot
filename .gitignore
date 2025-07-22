@@ -1,4 +1,6 @@
 __pycache__/
+.pytest_cache/
+.vscode/
 nohup.out
 flask_production.log
 quick_check.py
