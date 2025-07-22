@@ -9,19 +9,40 @@ from datetime import date, timedelta
 
 @dataclass
 class DeadlinesVO:  # Value Object
-    oj_d1: str
-    summary_d1: str
+    oj_deadline: str
+    summary_deadline: str
 
 
 @dataclass
 class CourseUnit:  # Entity (within Course Aggregate)
     name: str
-    deadlines: DeadlinesVO
+    deadlines: DeadlinesVO = None
 
-    def get_homework_deadlines(self, base_date: date) -> dict:
+    def get_homework_deadlines(
+        self,
+        base_date: date,
+        oj_d1: int = 6,
+        summary_d1: int = 7,
+        oj_hour: str = "04:01:00",
+        summary_hour: str = "12:01:00"
+    ) -> dict:
+        """
+        根據起始日期計算 OJ 與 Summary 的作業截止時間，
+        並將計算結果存入 self.deadlines。
+        """
+        oj_deadline_dt = datetime.combine(
+            base_date + timedelta(days=oj_d1), datetime.strptime(oj_hour, "%H:%M:%S").time())
+        summary_deadline_dt = datetime.combine(
+            base_date + timedelta(days=summary_d1), datetime.strptime(summary_hour, "%H:%M:%S").time())
+
+        self.deadlines = DeadlinesVO(
+            oj_deadline=oj_deadline_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            summary_deadline=summary_deadline_dt.strftime("%Y-%m-%d %H:%M:%S")
+        )
+
         return {
-            "oj": (base_date + timedelta(days=self.deadlines.oj_d1)).strftime("%Y-%m-%d 04:01:00"),
-            "summary": (base_date + timedelta(days=self.deadlines.summary_d1)).strftime("%Y-%m-%d 12:01:00")
+            "oj": self.deadlines.oj_deadline,
+            "summary": self.deadlines.summary_deadline
         }
 
 
@@ -47,7 +68,7 @@ class Course:  # Aggregate Root
         """
         實際的課程起始時間請詢問 Anna，以取得正確的 start_hour。
         沒有考量到颱風假、國定假日、Anna 的行程，它就只是計算下週上課日期。
-        
+
         注意: `date.today()` 回傳系統當下的日期，所以不要亂搞電腦。
         """
         today = date.today()

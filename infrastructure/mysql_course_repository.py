@@ -1,9 +1,9 @@
 # infrastructure/mysql_course_repository.py
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pymysql
 
-from domain.course import Course, CourseRepository, CourseUnit, DeadlinesVO
+from domain.course import Course, CourseRepository, CourseUnit
 
 
 class MySQLCourseRepository(CourseRepository):
@@ -69,14 +69,14 @@ class MySQLCourseRepository(CourseRepository):
                     oj_days = dl_row['OJ_D1'] if dl_row else 6
                     summary_days = dl_row['Summary_D1'] if dl_row else 7
 
-                    deadlines = DeadlinesVO(
-                        oj_d1=self._date_add(
-                            base=start_time, days=oj_days, hour="04:01:00"),
-                        summary_d1=self._date_add(
-                            base=start_time, days=summary_days, hour="12:01:00")
-                    )
+                    base_date = start_time.date() if isinstance(
+                        start_time, datetime) else datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S").date()
 
-                    unit = CourseUnit(name=unit_name, deadlines=deadlines)
+                    unit = CourseUnit(name=unit_name)
+
+                    unit.get_homework_deadlines(
+                        base_date=base_date, oj_d1=oj_days, summary_d1=summary_days)
+
                     units.append(unit)
 
                 course.units = units
@@ -94,8 +94,3 @@ class MySQLCourseRepository(CourseRepository):
             attendance_sheet_url=row["present_url"],
             units=[]
         )
-
-    def _date_add(self, base: str, days: int, hour: str) -> str:
-        dt = datetime.strptime(
-            base, "%Y-%m-%d %H:%M:%S") + timedelta(days=days)
-        return dt.strftime(f"%Y-%m-%d {hour}")

@@ -62,13 +62,13 @@ class ScoreAggregator:
 
         try:
             oj_exercise_score = self._get_OJ_exercise_score(
-                stdID=student.student_id, contents_name=unit_name, oj_contest_title=course.oj_contest_title, deadline=unit.deadlines.oj_d1
+                stdID=student.student_id, contents_name=unit_name, oj_contest_title=course.oj_contest_title, deadline=unit.deadlines.oj_deadline
             )
             oj_advance_score = self._get_OJ_advance_score(
-                stdID=student.student_id, contents_name=unit_name, oj_contest_title=course.oj_contest_title, deadline=unit.deadlines.oj_d1
+                stdID=student.student_id, contents_name=unit_name, oj_contest_title=course.oj_contest_title, deadline=unit.deadlines.oj_deadline
             )
             summary_score = self._get_summary_score(
-                context_title=course.context_title, stdID=student.student_id, contents_name=unit_name, deadline=unit.deadlines.summary_d1)
+                context_title=course.context_title, stdID=student.student_id, contents_name=unit_name, deadline=unit.deadlines.summary_deadline)
             mistake_review_score = self._get_mistake_review_value(
                 student.student_id, unit_name)
         except Exception as e:
