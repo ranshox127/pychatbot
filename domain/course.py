@@ -1,5 +1,7 @@
+# domain/course.py
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List
 from enum import Enum
 from datetime import date, timedelta
@@ -41,12 +43,28 @@ class Course:  # Aggregate Root
     attendance_sheet_url: str
     units: List[CourseUnit]
 
-    def get_next_course_date(self) -> str:
+    def get_next_course_date(self, start_hour: int = 9) -> str:
+        """
+        實際的課程起始時間請詢問 Anna，以取得正確的 start_hour。
+        沒有考量到颱風假、國定假日、Anna 的行程，它就只是計算下週上課日期。
+        
+        注意: `date.today()` 回傳系統當下的日期，所以不要亂搞電腦。
+        """
         today = date.today()
-        today_weekday = today.weekday()  # 0 = Monday
+        now = datetime.now()
+        today_weekday = today.weekday()
+
         days_until_next = (self.day_of_week - today_weekday) % 7
-        days_until_next = days_until_next or 7  # same day => next week
-        next_date = today + timedelta(days=days_until_next)
+
+        # 處理同一天邏輯
+        if days_until_next == 0:
+            if now.hour < start_hour:
+                next_date = today
+            else:
+                next_date = today + timedelta(days=7)
+        else:
+            next_date = today + timedelta(days=days_until_next)
+
         return str(next_date)
 
 
