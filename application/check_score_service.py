@@ -42,7 +42,7 @@ class CheckScoreService:
         self.user_state_accessor.set_state(
             line_user_id, UserStateEnum.AWAITING_CONTENTS_NAME)
 
-    def check_score(self, line_user_id: str, reply_token: str, target_content: str, message_log_id: int):
+    def check_score(self, line_user_id: str, reply_token: str, target_content: str, mistake_review_sheet_url: str, message_log_id: int):
         student = self.student_repo.find_by_line_id(line_user_id)
         course = self.course_repo.get_course_shell(student.context_title)
         course = self.course_repo.populate_units(course)
@@ -56,7 +56,7 @@ class CheckScoreService:
 
         try:
             report = self.score_aggregator.aggregate(
-                student=student, course=course, unit_name=target_content)
+                student=student, course=course, unit_name=target_content, mistake_review_sheet_url=mistake_review_sheet_url)
         except ScoreAggregationFailed:
             self.line_service.reply_text_message(
                 reply_token=reply_token,
