@@ -4,21 +4,19 @@ from application.user_state_accessor import UserStateAccessor
 from domain.course import CourseRepository
 from domain.event_log import EventEnum
 from domain.leave_request import LeaveRequest, LeaveRequestRepository
-from domain.student import StudentRepository
+from domain.student import Student
 from domain.user_state import UserStateEnum
 from infrastructure.gateways.line_api_service import LineApiService
 from interfaces.message_builders.leave_builders import LeaveConfirmationBuilder
 
 
 class LeaveService:
-    def __init__(self, student_repo: StudentRepository,
-                 course_repo: CourseRepository,
+    def __init__(self, course_repo: CourseRepository,
                  leave_repo: LeaveRequestRepository,
                  user_state_accessor: UserStateAccessor,
                  line_service: LineApiService,
                  chatbot_logger: ChatbotLogger,
                  mail_carrier: MailCarrier):
-        self.student_repo = student_repo
         self.course_repo = course_repo
         self.leave_repo = leave_repo
         self.user_state_accessor = user_state_accessor
@@ -26,9 +24,7 @@ class LeaveService:
         self.chatbot_logger = chatbot_logger
         self.mail_carrier = mail_carrier
 
-    def apply_for_leave(self, line_user_id: str, reply_token: str):
-        student = self.student_repo.find_by_line_id(line_user_id)
-
+    def apply_for_leave(self, student: Student, reply_token: str):
         course = self.course_repo.get_course_shell(student.context_title)
         next_course_date = course.get_next_course_date()
 
@@ -38,9 +34,7 @@ class LeaveService:
         self.line_service.reply_message(
             reply_token=reply_token, messages=[message_to_send])
 
-    def ask_leave_reason(self, line_user_id: str, reply_token: str, message_log_id: str):
-        student = self.student_repo.find_by_line_id(line_user_id)
-
+    def ask_leave_reason(self, student: Student, reply_token: str, message_log_id: str):
         self.chatbot_logger.log_event(student_id=student.student_id, event_type=EventEnum.ASK_FOR_LEAVE,
                                       message_log_id=message_log_id, problem_id=None, hw_id=None, context_title=student.context_title)
 
@@ -50,8 +44,7 @@ class LeaveService:
         self.line_service.reply_text_message(
             reply_token=reply_token, text=f"{student.name}，你好，收到你的請假要求了，想請問請假的原因是甚麼呢?(請在一條訊息中進行說明)")
 
-    def submit_leave_reason(self, line_user_id: str, reason: str, reply_token: str):
-        student = self.student_repo.find_by_line_id(line_user_id)
+    def submit_leave_reason(self, student: Student, reason: str, reply_token: str):
         self.user_state_accessor.set_state(
             student.line_user_id, UserStateEnum.IDLE)
 

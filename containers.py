@@ -119,7 +119,6 @@ class AppContainer(containers.DeclarativeContainer):
 
     leave_service = providers.Factory(
         LeaveService,
-        student_repo=student_repo,
         course_repo=course_repo,
         leave_repo=leave_repo,
         user_state_accessor=user_state_accessor,
@@ -130,7 +129,6 @@ class AppContainer(containers.DeclarativeContainer):
 
     ask_ta_service = providers.Factory(
         AskTAService,
-        student_repo=student_repo,
         user_state_accessor=user_state_accessor,
         line_service=line_api_service,
         chatbot_logger=chatbot_logger
@@ -138,7 +136,6 @@ class AppContainer(containers.DeclarativeContainer):
 
     check_attendance_service = providers.Factory(
         CheckAttendanceService,
-        student_repo=student_repo,
         course_repo=course_repo,
         line_service=line_api_service,
         chatbot_logger=chatbot_logger
@@ -146,7 +143,6 @@ class AppContainer(containers.DeclarativeContainer):
 
     check_score_service = providers.Factory(
         CheckScoreService,
-        student_repo=student_repo,
         course_repo=course_repo,
         user_state_accessor=user_state_accessor,
         score_aggregator=score_aggregator,
