@@ -7,6 +7,9 @@ from domain.user_state import UserState, UserStateEnum
 
 def test_get_state_returns_existing_state():
     """
+    Scenario: 使用者有狀態紀錄
+
+    Expect: 回傳對應的狀態
     """
     mock_repo = MagicMock()
     mock_repo.get.return_value = UserState(
@@ -21,6 +24,11 @@ def test_get_state_returns_existing_state():
 
 
 def test_get_state_returns_idle_if_none():
+    """
+    Scenario: 使用者沒有任何紀錄
+
+    Expect: 預設回傳 IDLE 狀態
+    """
     mock_repo = MagicMock()
     mock_repo.get.return_value = None
 
@@ -31,6 +39,11 @@ def test_get_state_returns_idle_if_none():
 
 
 def test_set_state_creates_new_state_if_none():
+    """
+    Scenario: 第一次設定狀態
+
+    Expect: 建立新 UserState 並儲存
+    """
     mock_repo = MagicMock()
     mock_repo.get.return_value = None
 
@@ -41,3 +54,21 @@ def test_set_state_creates_new_state_if_none():
     args = mock_repo.save.call_args[0][0]  # 第一個參數
     assert args.line_user_id == "U123"
     assert args.status == UserStateEnum.AWAITING_LEAVE_REASON
+
+
+def test_set_state_updates_existing_state():
+    """
+    Scenario: 使用者已存在狀態紀錄
+
+    Expect: 直接更新 status 欄位並呼叫 save()
+    """
+    existing_state = UserState("U123", UserStateEnum.AWAITING_TA_QUESTION)
+    mock_repo = MagicMock()
+    mock_repo.get.return_value = existing_state
+
+    accessor = UserStateAccessor(mock_repo)
+    accessor.set_state("U123", UserStateEnum.IDLE)
+
+    saved_state = mock_repo.save.call_args[0][0]
+    assert saved_state.line_user_id == "U123"
+    assert saved_state.status == UserStateEnum.IDLE
