@@ -1,4 +1,4 @@
-# uv run -m pytest tests/test_user_state_accessor.py
+# uv run -m pytest tests/application/test_user_state_accessor.py
 from unittest.mock import MagicMock
 
 from application.user_state_accessor import UserStateAccessor
