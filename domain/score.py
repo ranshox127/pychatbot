@@ -12,10 +12,7 @@ from domain.course import Course
 @dataclass
 class ScoreReport:
     contents_name: str
-    oj_exercise_score: str
-    oj_advance_score: str
-    summary_score: str
-    mistake_review_score: str
+    scores: dict[str, str]
 
 
 class OnlinejudgeRepository(ABC):
@@ -80,10 +77,12 @@ class ScoreAggregator:
 
         return ScoreReport(
             contents_name=unit_name,
-            oj_exercise_score=oj_exercise_score,
-            oj_advance_score=oj_advance_score,
-            summary_score=summary_score,
-            mistake_review_score=mistake_review_score
+            scores={
+                "OJ Exercise(完成題數)": oj_exercise_score,
+                "OJ Advance(完成題數)": oj_advance_score,
+                "總結概念成績": summary_score,
+                "錯誤回顧成績": mistake_review_score
+            }
         )
 
     def _get_OJ_exercise_score(self, oj_contest_title, contents_name, stdID, deadline) -> str:

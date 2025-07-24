@@ -54,15 +54,8 @@ class CheckScoreService:
                 student.line_user_id, UserStateEnum.IDLE)
             return
 
-        try:
-            report = self.score_aggregator.aggregate(
-                student=student, course=course, unit_name=target_content, mistake_review_sheet_url=mistake_review_sheet_url)
-        except ScoreAggregationFailed:
-            self.line_service.reply_text_message(
-                reply_token=reply_token,
-                text="很抱歉，目前系統故障，請稍後再試。"
-            )
-            return
+        report = self.score_aggregator.aggregate(
+            student=student, course=course, unit_name=target_content, mistake_review_sheet_url=mistake_review_sheet_url)
 
         message = self._format_score_report(report)
         self.line_service.reply_text_message(
@@ -75,10 +68,7 @@ class CheckScoreService:
                                       message_log_id=message_log_id, problem_id=None, hw_id=target_content, context_title=student.context_title)
 
     def _format_score_report(self, report: ScoreReport) -> str:
-        return (
-            f"同學你好，以下是你的 {report.contents_name} 作業成績：\n"
-            f"OJ Exercise(完成題數): {report.oj_exercise_score}\n"
-            f"OJ Advance(完成題數): {report.oj_advance_score}\n"
-            f"總結概念成績: {report.summary_score}\n"
-            f"錯誤回顧成績: {report.mistake_review_score}"
-        )
+        lines = [f"同學你好，以下是你的 {report.contents_name} 作業成績："]
+        for label, value in report.scores.items():
+            lines.append(f"{label}: {value}")
+        return "\n".join(lines)
