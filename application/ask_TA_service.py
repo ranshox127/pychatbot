@@ -15,7 +15,8 @@ class AskTAService:
     def start_inquiry(self, student: Student, reply_token: str):
         self.user_state_accessor.set_state(
             student.line_user_id, UserStateEnum.AWAITING_TA_QUESTION)
-        self.line_service.reply_text_message(reply_token, "請同學留下問題~助教會盡快回覆!")
+        self.line_service.reply_text_message(
+            reply_token=reply_token, text="請同學留下問題~助教會盡快回覆!")
 
     def submit_question(self, student: Student, message_log_id: int):
         self.user_state_accessor.set_state(
