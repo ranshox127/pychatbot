@@ -49,7 +49,7 @@ class CheckScoreService:
 
         if target_content not in unit_names:
             self.line_service.reply_text_message(
-                reply_token=reply_token, text="請單元名稱不存在，請確認後再重新查詢喔。")
+                reply_token=reply_token, text="單元名稱不存在，請確認後再重新查詢喔。")
             self.user_state_accessor.set_state(
                 student.line_user_id, UserStateEnum.IDLE)
             return
