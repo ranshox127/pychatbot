@@ -5,23 +5,20 @@ import pandas as pd
 from application.chatbot_logger import ChatbotLogger
 from domain.course import CourseRepository
 from domain.event_log import EventEnum
-from domain.student import StudentRepository
+from domain.student import Student
 from infrastructure.gateways.line_api_service import LineApiService
 
 
 class CheckAttendanceService:
-    def __init__(self, student_repo: StudentRepository,
-                 course_repo: CourseRepository,
+    def __init__(self, course_repo: CourseRepository,
                  line_service: LineApiService,
                  chatbot_logger: ChatbotLogger
                  ):
-        self.student_repo = student_repo
         self.course_repo = course_repo
         self.line_service = line_service
         self.chatbot_logger = chatbot_logger
 
-    def check_attendance(self, line_user_id: str, reply_token: str):
-        student = self.student_repo.find_by_line_id(line_user_id)
+    def check_attendance(self, student: Student, reply_token: str):
         course = self.course_repo.get_course_shell(student.context_title)
 
         absence_info = self._get_absence_info_by_name(
@@ -91,13 +88,11 @@ class CheckAttendanceService:
             return "無出席紀錄，請聯絡助教確認"
 
         name = absence_info["name"]
-        lines = [
-            f"{name} 你好，你在以下日期有缺席紀錄:"
-        ]
-
+        lines = [f"{name} 你好，你在以下日期有缺席紀錄:"]
         has_absence = False
+
         for date, status in absence_info.items():
-            if date not in {"id", "name", "department", "grade"} and pd.notna(status):
+            if date not in {"id", "name", "department", "grade"} and pd.notna(status) and str(status).strip() != "":
                 lines.append(f"{date}: {status}")
                 has_absence = True
 
