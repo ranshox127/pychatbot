@@ -69,8 +69,5 @@ class LeaveService:
                 to=course.ta_emails, content=LeaveEmailContent(leave_request))
 
     def _now_string(self) -> str:
-        """
-        需測試。
-        """
         from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
