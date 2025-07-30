@@ -7,7 +7,7 @@ from domain.leave_request import LeaveRequest, LeaveRequestRepository
 from domain.student import Student
 from domain.user_state import UserStateEnum
 from infrastructure.gateways.line_api_service import LineApiService
-from interfaces.message_builders.leave_builders import LeaveConfirmationBuilder
+from application.message_builders.leave_builders import LeaveConfirmationBuilder
 
 
 class LeaveService:
