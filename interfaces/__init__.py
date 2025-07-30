@@ -1,4 +1,4 @@
-from .linebot import linebot_bp
+from .linebot_route import linebot_bp
 
 def register_blueprints(app):
 

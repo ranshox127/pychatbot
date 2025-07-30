@@ -9,7 +9,7 @@ from linebot.v3.messaging import (ApiClient, Configuration, MessagingApi,
 
 from config.settings import CONFIG_BY_NAME
 from containers import AppContainer
-from interfaces.linebot import create_linebot_blueprint
+from interfaces.linebot_route import create_linebot_blueprint
 
 DEV_PORT = 8095
 PROD_PORT = 8096
