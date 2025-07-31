@@ -46,6 +46,7 @@ class RegistrationService:
         if self.student_repo.find_by_student_id(student_id_input):
             self.line_service.reply_text_message(
                 reply_token, "此學號已被其他 Line 帳號使用，請洽詢助教。")
+            return
 
         # 2. 從教學平台驗證學號
         enrollment = self.moodle_repo.find_student_info(
@@ -53,6 +54,7 @@ class RegistrationService:
         if not enrollment:
             self.line_service.reply_text_message(
                 reply_token, "在教學平台上找不到這個學號，請確認後再試一次。")
+            return
 
         # 3.找課程
         enrollments = self.moodle_repo.find_student_enrollments(
@@ -70,6 +72,7 @@ class RegistrationService:
         if not target_enrollment:
             self.line_service.reply_text_message(
                 reply_token, "你所在的課程目前未啟用 Chatbot 服務。")
+            return
 
         # 4. 建立 Student 領域物件 (業務規則封裝在內)
         new_student = Student.register(
