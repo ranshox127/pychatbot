@@ -11,7 +11,7 @@ class MySQLStudentRepository(StudentRepository):
         self.db_config = db_config
 
     def _get_connection(self):
-        return pymysql.connect(**self.db_config)
+        return pymysql.connect(**self.db_config, cursorclass=pymysql.cursors.DictCursor)
 
     def find_by_line_id(self, line_user_id: str) -> Optional[Student]:
         with self._get_connection() as conn:
@@ -55,8 +55,8 @@ class MySQLStudentRepository(StudentRepository):
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, (
-                    student.student_id, student.line_user_id, student.moodle_id,
-                    student.name, student.course_title, student.role_id
+                    student.student_id, student.line_user_id, student.mdl_id,
+                    student.name, student.context_title, student.role.value
                 ))
             conn.commit()
 
