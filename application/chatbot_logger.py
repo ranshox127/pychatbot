@@ -12,7 +12,6 @@ class ChatbotLogger:
 
     def log_message(self, student_id: str, message: str, context_title: str = None) -> int:
         msg_log = MessageLog(
-            log_id=-1,
             operation_time=datetime.now(),
             student_id=student_id,
             message=message,
@@ -23,7 +22,6 @@ class ChatbotLogger:
     def log_event(self, student_id: str, event_type: EventEnum, message_log_id: int = None,
                   problem_id=None, hw_id=None, context_title=None):
         event_log = EventLog(
-            log_id=-1,
             operation_time=datetime.now(),
             student_id=student_id,
             event_type=event_type,

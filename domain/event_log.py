@@ -26,7 +26,6 @@ class EventEnum(Enum):
 
 @dataclass
 class EventLog:
-    log_id: int
     operation_time: datetime
     student_id: str
     event_type: EventEnum
@@ -35,6 +34,7 @@ class EventLog:
     context_title: Optional[str] = None
     message_log_id: Optional[int] = None
     gai_auto_reply_status: Optional[int] = None  # 0, 1, 2 for GAI reply
+    log_id: Optional[int] = None  # 放最後，不要預設
 
 
 class EventLogRepository(ABC):
