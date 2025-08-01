@@ -10,6 +10,27 @@ def repo(test_config):
     return MySQLStudentRepository(test_config.LINEBOT_DB_CONFIG)
 
 
+@pytest.fixture
+def seed_student_data(mysql_conn):
+    with mysql_conn.cursor() as cur:
+        cur.execute("TRUNCATE TABLE account_info")
+        cur.execute("TRUNCATE TABLE course_info")
+
+        cur.execute("""
+            INSERT INTO course_info(context_title, status, reserved)
+            VALUES('1122_程式設計-Python_黃鈺晴教師', 'in_progress', '')
+        """)
+        cur.execute("""
+            INSERT INTO account_info(student_ID, line_userID, mdl_ID, student_name, context_title, roleid, del)
+            VALUES('114514000', 'lineid', 12345, '旅歐文', '1122_程式設計-Python_黃鈺晴教師', 5, 0)
+        """)
+    yield
+    # ⬇️ 清除測試資料（Teardown）
+    with mysql_conn.cursor() as cur:
+        cur.execute("TRUNCATE TABLE account_info")
+        cur.execute("TRUNCATE TABLE course_info")
+
+
 def student():
     return Student(
         line_user_id="lineid",
@@ -27,6 +48,15 @@ def test_find_by_line_id_returns_student(repo, seed_student_data):
     s = repo.find_by_line_id("lineid")
     assert s is not None
     assert s.student_id == "114514000"
+    assert s.name == "旅歐文"
+    assert s.role == RoleEnum.STUDENT
+    assert s.is_active
+
+
+def test_find_by_student_id_returns_student(repo, seed_student_data):
+    s = repo.find_by_student_id("114514000")
+    assert s is not None
+    assert s.line_user_id == "lineid"
     assert s.name == "旅歐文"
     assert s.role == RoleEnum.STUDENT
     assert s.is_active
