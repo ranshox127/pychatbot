@@ -24,7 +24,7 @@ def test_log_message_should_call_repo_with_correct_data():
     assert saved_msg.student_id == "S123"
     assert saved_msg.message == "這是一則訊息"
     assert saved_msg.context_title == "Python 課程"
-    assert saved_msg.log_id == -1
+    assert saved_msg.log_id is None
     assert isinstance(saved_msg.operation_time, datetime)
 
 
@@ -49,5 +49,5 @@ def test_log_event_should_call_repo_with_correct_data():
     assert saved_event.problem_id == "p001"
     assert saved_event.hw_id == "C3"
     assert saved_event.context_title == "Python 課程"
-    assert saved_event.log_id == -1
+    assert saved_event.log_id is None
     assert isinstance(saved_event.operation_time, datetime)
