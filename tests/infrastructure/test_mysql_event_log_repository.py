@@ -10,6 +10,13 @@ def repo(test_config):
     return MySQLEventLogRepository(test_config.LINEBOT_DB_CONFIG)
 
 
+@pytest.fixture(autouse=True)
+def clean_event_logs(mysql_conn):
+    with mysql_conn.cursor() as cur:
+        cur.execute("TRUNCATE TABLE event_logs")
+    mysql_conn.commit()
+
+
 @pytest.mark.parametrize("event_log", [
     EventLog(datetime.now(), "114514", EventEnum.REGISTER,
              None, None, "1122_程式設計-Python_黃鈺晴教師", -1),
