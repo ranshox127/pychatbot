@@ -5,9 +5,6 @@ import pymysql
 
 @pytest.fixture
 def mysql_conn(test_config):
-    print(f"[DEBUG-MYSQL-FIXTURE] Connecting to {test_config.LINEBOT_DB_CONFIG['host']}:{test_config.LINEBOT_DB_CONFIG.get('port', 3306)} "
-          f"user={test_config.LINEBOT_DB_CONFIG['user']} "
-          f"db={test_config.LINEBOT_DB_CONFIG['db']}")
     conn = pymysql.connect(
         host=test_config.LINEBOT_DB_CONFIG["host"],
         user=test_config.LINEBOT_DB_CONFIG["user"],
@@ -16,5 +13,11 @@ def mysql_conn(test_config):
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=True
     )
+    yield conn
+    conn.close()
+
+@pytest.fixture
+def rs_mysql_conn(test_config):
+    conn = pymysql.connect(**test_config.REVIEW_SYSTEM_DB_CONFIG)
     yield conn
     conn.close()

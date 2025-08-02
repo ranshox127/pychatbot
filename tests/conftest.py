@@ -5,10 +5,6 @@ from dotenv import load_dotenv
 
 load_dotenv(".env.test")  # 提前載入
 
-import os
-print("[DEBUG-CONFIGTEST] CHATBOT_DB_HOST =", os.getenv("CHATBOT_DB_HOST"))
-print("[DEBUG-CONFIGTEST] LINEBOT_DB_NAME =", os.getenv("LINEBOT_DB_NAME"))
-
 
 @pytest.fixture(scope="session")
 def test_config():
