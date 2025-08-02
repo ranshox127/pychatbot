@@ -1,33 +1,18 @@
-# tests/test_mysql_user_state_repository.py
-# uv run -m pytest tests/test_mysql_user_state_repository.py
+# uv run -m pytest tests/infrastructure/test_mysql_user_state_repository.py
 import pytest
-import pymysql
 from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
 from domain.user_state import UserState, UserStateEnum
 
 
-@pytest.fixture(scope="module")
-def db_config():
-    return {
-        "host": '140.115.53.151',
-        "user": "kslab",
-        "password": 'Kslab35356!',
-        "db": "linebot_test",
-        "charset": "utf8mb4",
-        "cursorclass": pymysql.cursors.Cursor,
-        "autocommit": True,
-    }
-
-
 @pytest.fixture()
-def repo(db_config):
-    user_state_repo = MySQLUserStateRepository(db_config)
+def repo(test_config):
+    user_state_repo = MySQLUserStateRepository(test_config.LINEBOT_DB_CONFIG)
 
     # 每個測試前清除目標用戶資料
     with user_state_repo._get_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                "DELETE FROM user_states WHERE line_user_id = 'U_test'")
+                "TRUNCATE TABLE user_states")
             conn.commit()
 
     yield user_state_repo
@@ -36,7 +21,7 @@ def repo(db_config):
     with user_state_repo._get_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
-                "DELETE FROM user_states WHERE line_user_id = 'U_test'")
+                "TRUNCATE TABLE user_states")
             conn.commit()
 
 
