@@ -41,46 +41,44 @@ class MySQLCourseRepository(CourseRepository):
         with self._get_rs_db_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = '''
-                    SELECT contents_name, start_time
-                    FROM review_system.review_publish
+                    SELECT contents_name, lesson_date
+                    FROM review_publish
                     WHERE context_title = %s
                     AND publish_flag = 1;
                 '''
                 cur.execute(query, (course.context_title,))
                 rows = cur.fetchall()
 
-                units = []
-                for row in rows:
-                    contents_name = row['contents_name']
-                    unit_name = contents_name.split('_')[0]
-                    start_time = row['start_time']  # "%Y-%m-%d %H:%M:%S"
+        units = []
+        for row in rows:
+            contents_name = row['contents_name']
+            unit_name = contents_name.split('_')[0]
+            start_time = row['lesson_date']  # "%Y-%m-%d %H:%M:%S"
 
-                    # 查詢自訂 deadline（天數）
+            with self._get_linebot_db_connection() as conn2:
+                with conn2.cursor(pymysql.cursors.DictCursor) as cur2:
                     query_dl = '''
                         SELECT OJ_D1, Summary_D1
-                        FROM review_system.change_homework_deadline
+                        FROM change_HW_deadline
                         WHERE context_title = %s AND contents_name = %s
                     '''
-                    cur.execute(
+                    cur2.execute(
                         query_dl, (course.context_title, contents_name))
-                    dl_row = cur.fetchone()
+                    dl_row = cur2.fetchone()
 
-                    # 決定延後幾天
-                    oj_days = dl_row['OJ_D1'] if dl_row else 6
-                    summary_days = dl_row['Summary_D1'] if dl_row else 7
+            oj_days = dl_row['OJ_D1'] if dl_row else 6
+            summary_days = dl_row['Summary_D1'] if dl_row else 7
 
-                    base_date = start_time.date() if isinstance(
-                        start_time, datetime) else datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S").date()
+            base_date = start_time.date() if isinstance(
+                start_time, datetime) else datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S").date()
 
-                    unit = CourseUnit(name=unit_name)
+            unit = CourseUnit(name=unit_name)
+            unit.get_homework_deadlines(
+                base_date=base_date, oj_d1=oj_days, summary_d1=summary_days)
 
-                    unit.get_homework_deadlines(
-                        base_date=base_date, oj_d1=oj_days, summary_d1=summary_days)
+            units.append(unit)
 
-                    units.append(unit)
-
-                course.units = units
-
+        course.units = units
         return course
 
     def _map_row_to_course(self, row: dict) -> Course:
