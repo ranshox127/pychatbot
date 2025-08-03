@@ -21,7 +21,7 @@ class OnlinejudgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_exercise_summission_by_contents_name(self, oj_contest_title: str, contents_name: str, stdID: str, deadline) -> int:
+    def get_exercise_submission_by_contents_name(self, oj_contest_title: str, contents_name: str, stdID: str, deadline) -> int:
         pass
 
     @abstractmethod
@@ -29,7 +29,7 @@ class OnlinejudgeRepository(ABC):
         pass
 
     @abstractmethod
-    def get_advance_summission_by_contents_name(self, oj_contest_title: str, contents_name: str, stdID: str, deadline) -> int:
+    def get_advance_submission_by_contents_name(self, oj_contest_title: str, contents_name: str, stdID: str, deadline) -> int:
         pass
 
 
