@@ -16,8 +16,16 @@ def mysql_conn(test_config):
     yield conn
     conn.close()
 
+
 @pytest.fixture
 def rs_mysql_conn(test_config):
     conn = pymysql.connect(**test_config.REVIEW_SYSTEM_DB_CONFIG)
+    yield conn
+    conn.close()
+
+
+@pytest.fixture
+def verify_mysql_conn(test_config):
+    conn = pymysql.connect(**test_config.VERIFY_DB_CONFIG)
     yield conn
     conn.close()
