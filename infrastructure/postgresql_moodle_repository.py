@@ -1,4 +1,7 @@
 """
+## 目前設定
+idle_timeout 為 60 秒，測試方法就是直接等
+
 > **「高峰期集中查詢、之後閒置」**  
 > 如何在**高峰註冊效率**與**平時資源節省**之間取得平衡？
 
@@ -23,6 +26,9 @@ from threading import Lock, Timer
 from contextlib import contextmanager
 
 from domain.moodle_enrollment import MoodleEnrollment, MoodleRepository
+
+from sshtunnel import SSHTunnelForwarder
+import psycopg2
 
 
 class PostgreSQLMoodleRepository(MoodleRepository):
@@ -91,7 +97,7 @@ class LazyMoodleConnectionManager:
     ## 🛠️ 技術方案：Lazy SSH + Expiring Connection Wrapper
     """
 
-    def __init__(self, db_config, ssh_config, idle_timeout=300):
+    def __init__(self, db_config, ssh_config, idle_timeout=60):
         self.db_config = db_config
         self.ssh_config = ssh_config
         self.idle_timeout = idle_timeout
@@ -101,8 +107,6 @@ class LazyMoodleConnectionManager:
         self._timer = None
 
     def _start(self):
-        from sshtunnel import SSHTunnelForwarder
-        import psycopg2
         try:
             self._tunnel = SSHTunnelForwarder(
                 (self.ssh_config['ssh_host'],
