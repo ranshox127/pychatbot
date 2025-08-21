@@ -1,9 +1,8 @@
-# interfaces/linebot.py
+# interfaces/linebot_route.py
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, abort, current_app, request
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import (ReplyMessageRequest, TextMessage)
 from linebot.v3.webhooks import (FollowEvent, MessageEvent, PostbackEvent,
                                  TextMessageContent)
 
@@ -26,180 +25,168 @@ from containers import AppContainer
 # }
 
 
-def create_linebot_blueprint() -> Blueprint:
+@inject
+def handle_follow(
+    event: FollowEvent,
+    registration_service: RegistrationService = Provide[AppContainer.registration_service]
+):
+    user_id = event.source.user_id
+    registration_service.handle_follow_event(user_id, event.reply_token)
+
+
+@inject
+def handle_message(
+    event: MessageEvent,
+    student_repository: StudentRepository = Provide[AppContainer.student_repo],
+    registration_service: RegistrationService = Provide[AppContainer.registration_service],
+    user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
+    ask_ta_service: AskTAService = Provide[AppContainer.ask_ta_service],
+    check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
+    leave_service: LeaveService = Provide[AppContainer.leave_service],
+    chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
+):
+    user_id = event.source.user_id
+    text = event.message.text.strip()
+
+    # 第一層：存在性檢查
+    student = student_repository.find_by_line_id(user_id)
+    if not student:
+        # 如果使用者不存在，任何訊息都視為嘗試註冊學號
+        registration_service.register_student(
+            user_id, text, event.reply_token)
+        return
+
+    # 第二層：領域狀態檢查 (雖然在目前流程中，不存在的用戶已處理，但這是一個好的實踐)
+    if not student.is_registered():
+        registration_service.register_student(
+            user_id, text, event.reply_token)
+        return
+
+    # 第三層：對話狀態檢查
+    message_log_id = chatbot_logger.log_message(
+        student_id=student.student_id, message=text, context_title=student.context_title)
+
+    session_state = user_state_accessor.get_state(user_id).status
+
+    if session_state == UserStateEnum.AWAITING_LEAVE_REASON:
+        leave_service.submit_leave_reason(
+            student=student, reason=text, reply_token=event.reply_token)
+        return
+    elif session_state == UserStateEnum.AWAITING_TA_QUESTION:
+        ask_ta_service.submit_question(
+            student=student, message_log_id=message_log_id)
+        return
+    elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
+        check_score_service.check_score(
+            student=student, reply_token=event.reply_token, target_content=text, message_log_id=message_log_id)
+    elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
+        pass
+
+    # 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
+    if text == "助教安安，我有問題!":
+        ask_ta_service.start_inquiry(
+            student=student, reply_token=event.reply_token)
+    else:
+        pass
+
+
+@inject
+def handle_postback(
+    event: PostbackEvent,
+    destination: str,                # 👈 第二個位置參數用來接住 line-bot-sdk 傳進來的 destination
+    *,
+    student_repository: StudentRepository = Provide[AppContainer.student_repo],
+    check_attendance_service: CheckAttendanceService = Provide[
+        AppContainer.check_attendance_service],
+    check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
+    user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
+    leave_service: LeaveService = Provide[AppContainer.leave_service],
+    chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
+):
     """
-    建立並設定 Linebot 的 Flask Blueprint。
-    這是一個工廠函式，確保所有依賴都在正確的 scope 內被建立。
+    main menu:
+    + 請假按鈕
+    + 查詢出席
+    + 查詢成績
+
+    請假:
+    + 是
+    + 否
+
+    總結評分表單:
+    + 取得分數
+    + 重新評分
+    + 人工評分
+
+    總結人工評分:
+    + 是
+    + 否
+
+    """
+    user_id = event.source.user_id
+
+    student = student_repository.find_by_line_id(user_id)
+
+    postback_action = event.postback.data
+
+    message_log_id = chatbot_logger.log_message(
+        student_id=student.student_id, message=postback_action, context_title=student.context_title)
+
+    if postback_action == 'apply_leave':
+        leave_service.apply_for_leave(
+            student=student, reply_token=event.reply_token)
+
+    elif postback_action == 'fetch_absence_info':
+        check_attendance_service.check_attendance(
+            student=student, reply_token=event.reply_token)
+
+    elif postback_action == 'check_homework':
+        check_score_service.check_publish_contents(
+            student=student, reply_token=event.reply_token)
+
+    elif postback_action == '[Action]confirm_to_leave':
+        leave_service.ask_leave_reason(
+            student=student, reply_token=event.reply_token, message_log_id=message_log_id)
+
+    elif postback_action == '[Action]cancel_to_leave':
+        user_state_accessor.set_state(
+            student.line_user_id, UserStateEnum.IDLE)
+
+    elif postback_action == '[INFO]get_summary_grading':
+        pass
+    elif postback_action == '[INFO]summary_re-gradding':
+        pass
+    elif postback_action == '[INFO]summary_re-gradding_by_TA':
+        pass
+    elif postback_action == '[INFO]summary_re-gradding_by_TA_check':
+        pass
+
+
+def create_linebot_blueprint(container: AppContainer) -> Blueprint:
+    """
+    建立、組裝並設定 Linebot 的 Flask Blueprint。
     """
     linebot_bp = Blueprint('linebot', __name__, url_prefix='/linebot')
 
-    # 在工廠內部，我們從 DI 容器中獲取配置來建立 handler。
-    # 因為 `wire` 函式會在 app 啟動時執行，所以此處可以安全地 Provide。
-    handler = WebhookHandler(Provide[AppContainer.config.LINE_CHANNEL_SECRET])
+    channel_secret = container.config.LINE_CHANNEL_SECRET()
+    handler = WebhookHandler(channel_secret)
 
-    # === 在此定義所有的路由和事件處理器 ===
+    # 手動註冊已經在模組層級定義好的、且被 @inject 修補過的函式
+    handler.add(FollowEvent)(handle_follow)
+    handler.add(MessageEvent, message=TextMessageContent)(
+        handle_message)  # MessageEvent 註冊方式稍有不同
+    handler.add(PostbackEvent)(handle_postback)
 
     @linebot_bp.route('/linebot/', methods=['POST'])
     def linebot():
-        """這是接收 LINE Webhook 的主要進入點。"""
         signature = request.headers.get('X-Line-Signature')
         body = request.get_data(as_text=True)
         current_app.logger.info("Request body: " + body)
-
         try:
-            # handler 現在是定義好的，可以安全使用
             handler.handle(body, signature)
         except InvalidSignatureError:
             current_app.logger.warning("Invalid signature.")
             abort(400)
         return 'OK'
-
-    # 因為 handler 已經在本函式 scope 內定義，
-    # 所以 @handler.add 裝飾器可以正確地找到它。
-    @handler.add(FollowEvent)
-    @inject
-    def handle_follow(
-        event: FollowEvent,
-        registration_service: RegistrationService = Provide[AppContainer.registration_service]
-    ):
-        user_id = event.source.user_id
-        registration_service.handle_follow_event(user_id, event.reply_token)
-
-    @handler.add(MessageEvent, message=TextMessageContent)
-    @inject
-    def handle_message(
-        event: MessageEvent,
-        student_repository: StudentRepository = Provide[AppContainer.student_repo],
-        registration_service: RegistrationService = Provide[AppContainer.registration_service],
-        user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
-        ask_ta_service: AskTAService = Provide[AppContainer.ask_ta_service],
-        check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
-        leave_service: LeaveService = Provide[AppContainer.leave_service],
-        chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
-    ):
-        user_id = event.source.user_id
-        text = event.message.text.strip()
-
-        # 第一層：存在性檢查
-        student = student_repository.find_by_line_id(user_id)
-        if not student:
-            # 如果使用者不存在，任何訊息都視為嘗試註冊學號
-            registration_service.register_student(
-                user_id, text, event.reply_token)
-            return
-
-        # 第二層：領域狀態檢查 (雖然在目前流程中，不存在的用戶已處理，但這是一個好的實踐)
-        if not student.is_registered():
-            registration_service.register_student(
-                user_id, text, event.reply_token)
-            return
-
-        # 第三層：對話狀態檢查
-        message_log_id = chatbot_logger.log_message(
-            student_id=student.student_id, message=text, context_title=student.context_title)
-
-        session_state = user_state_accessor.get_state(user_id).status
-
-        if session_state == UserStateEnum.AWAITING_LEAVE_REASON:
-            leave_service.submit_leave_reason(
-                student=student, reason=text, reply_token=event.reply_token)
-            return
-        elif session_state == UserStateEnum.AWAITING_TA_QUESTION:
-            ask_ta_service.submit_question(
-                student=student, message_log_id=message_log_id)
-            return
-        elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
-            check_score_service.check_score(
-                student=student, reply_token=event.reply_token, target_content=text, message_log_id=message_log_id)
-        elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
-            pass
-
-        # 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
-        if text == "助教安安，我有問題!":
-            ask_ta_service.start_inquiry(
-                student=student, reply_token=event.reply_token)
-        else:
-            pass
-
-    @handler.add(PostbackEvent)
-    @inject
-    def handle_postback(
-        event: PostbackEvent,
-        student_repository: StudentRepository = Provide[AppContainer.student_repo],
-        check_attendance_service: CheckAttendanceService = Provide[
-            AppContainer.check_attendance_service],
-        check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
-        leave_service: LeaveService = Provide[AppContainer.leave_service],
-        chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
-    ):
-        """
-        main menu:
-        + 請假按鈕
-        + 查詢出席
-        + 查詢成績
-
-        請假:
-        + 是
-        + 否
-
-        總結評分表單:
-        + 取得分數
-        + 重新評分
-        + 人工評分
-
-        總結人工評分:
-        + 是
-        + 否
-
-        """
-        user_id = event.source.user_id
-
-        student = student_repository.find_by_line_id(user_id)
-
-        postback_action = event.postback.data
-
-        message_log_id = chatbot_logger.log_message(
-            student_id=student.student_id, message=postback_action, context_title=student.context_title)
-
-        if postback_action == 'apply_leave':
-            leave_service.apply_for_leave(
-                student=student, reply_token=event.reply_token)
-
-        elif postback_action == 'fetch_absence_info':
-            check_attendance_service.check_attendance(
-                student=student, reply_token=event.reply_token)
-
-        elif postback_action == 'check_homework':
-            check_score_service.check_publish_contents(
-                student=student, reply_token=event.reply_token)
-
-        elif postback_action == '[Action]confirm_to_leave':
-            leave_service.ask_leave_reason(
-                student=student, reply_token=event.reply_token, message_log_id=message_log_id)
-        elif postback_action == '[Action]cancel_to_leave':
-            pass
-        elif postback_action == '[INFO]get_summary_grading':
-            pass
-        elif postback_action == '[INFO]summary_re-gradding':
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text='你剛剛點了[重新評分]')]
-                )
-            )
-        elif postback_action == '[INFO]summary_re-gradding_by_TA':
-            pass
-        elif postback_action == '[INFO]summary_re-gradding_by_TA_check':
-            pass
-        elif postback_action == 'C1':
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(
-                        text='C1')]
-                )
-            )
-
-    # === 路由和處理器定義結束 ===
 
     return linebot_bp
