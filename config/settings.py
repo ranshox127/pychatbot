@@ -3,11 +3,12 @@ import os
 
 
 class BaseConfig:
-    pass
+    USE_REAL_LINE = False
 
 
 class DevelopmentConfig(BaseConfig):
     FLASK_DEBUG = True
+    USE_REAL_LINE = os.getenv("USE_REAL_LINE", "false").lower() == "true"
 
     @property
     def LINE_ACCESS_TOKEN(self):
@@ -89,11 +90,11 @@ class DevelopmentConfig(BaseConfig):
         "main": "richmenu-2098cb2a534de65d2d1138b9210dbffe",
         "register": "richmenu-4667fcc9e76820a929220d8af84d3b2a"
     }
-    print("[DEBUG-SETTINGS] LINEBOT_DB_CONFIG =", LINEBOT_DB_CONFIG)
 
 
 class ProductionConfig(BaseConfig):
     FLASK_DEBUG = False
+    USE_REAL_LINE = True
 
     LINE_ACCESS_TOKEN = os.getenv("PROD_LINE_TOKEN")
     LINE_CHANNEL_SECRET = os.getenv("PROD_LINE_SECRET")
@@ -157,8 +158,25 @@ class ProductionConfig(BaseConfig):
         "register": "richmenu-bbbbbbbbbbbb"
     }
 
+# 【新增】為測試環境建立一個專屬的設定類別
+
+
+class TestingConfig(DevelopmentConfig):
+    """
+    專為 Pytest 設計的測試環境設定。
+    繼承自 DevelopmentConfig 來複用資料庫等設定，但覆寫關鍵值。
+    """
+    TESTING = True
+    USE_REAL_LINE = False
+
+    # 【關鍵】直接覆寫 LINE_CHANNEL_SECRET 為一個固定的字串
+    # 不再使用 @property 或 os.getenv，讓測試行為完全確定
+    LINE_CHANNEL_SECRET = "this_is_a_fixed_test_secret"
+    LINE_ACCESS_TOKEN = "this_is_a_fixed_test_access_token"
+
 
 CONFIG_BY_NAME = {
     "development": DevelopmentConfig,
     "production": ProductionConfig,
+    "testing": TestingConfig,  # <-- 【新增】將 TestingConfig 加入字典
 }
