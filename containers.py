@@ -1,5 +1,10 @@
 from dependency_injector import containers, providers
-from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
+from unittest.mock import MagicMock
+from linebot.v3.messaging import (
+    Configuration as LineMessagingConfig,
+    ApiClient,
+    MessagingApi,
+)
 
 from infrastructure.mysql_student_repository import MySQLStudentRepository
 from infrastructure.mysql_course_repository import MySQLCourseRepository
@@ -32,23 +37,42 @@ class AppContainer(containers.DeclarativeContainer):
     # This provider will hold the application configuration.
     config = providers.Configuration()
 
-    # 2. Gateway Providers (Infrastructure)
-    # The 'config' object is used here to get required values.
-    line_bot_api = providers.Singleton(
+    # 明確產生「line-bot 的 Configuration 實例」
+    line_messaging_config = providers.Factory(
+        LineMessagingConfig,
+        access_token=config.LINE_ACCESS_TOKEN,   # ← 確認 key 名稱真的存在
+    )
+
+    # 用上面的 Configuration 實例去建 ApiClient（單例）
+    line_api_client = providers.Singleton(
+        ApiClient,
+        configuration=line_messaging_config,    # ← 傳 provider，會被解析成「實例」
+    )
+
+    # Real 版
+    _real_line_bot_api = providers.Singleton(
         MessagingApi,
-        api_client=providers.Singleton(
-            ApiClient,
-            configuration=providers.Singleton(
-                Configuration, access_token=config.LINE_ACCESS_TOKEN
-            )
-        )
+        api_client=line_api_client,
+    )
+    # Mock 版
+    _mock_line_bot_api = providers.Singleton(
+        lambda: MagicMock(spec=MessagingApi)
+    )
+
+    # 切換：容器對外只暴露 line_bot_api，一律透過這個 provider 取
+    line_bot_api = providers.Selector(
+        config.USE_REAL_LINE,  # bool
+        **{
+            True: _real_line_bot_api,
+            False: _mock_line_bot_api,
+        }
     )
 
     line_api_service = providers.Factory(
         LineApiService,
-        line_bot_api=line_bot_api,
-        channel_access_token=config.LINE_ACCESS_TOKEN,
-        line_rich_menus=config.LINE_RICH_MENUS
+        line_bot_api=line_bot_api,                      # OK：DI 會取出實例
+        channel_access_token=config.LINE_ACCESS_TOKEN,  # 供你的 gateway 需要時使用
+        line_rich_menus=config.LINE_RICH_MENUS,
     )
 
     # 3. Repository Providers (Infrastructure)
