@@ -6,9 +6,9 @@ from domain.score import SummaryRepository
 
 
 class MySQLSummaryRepository(SummaryRepository):
-    def __init__(self, linebot_db_config: dict, verify_config: dict):
+    def __init__(self, linebot_db_config: dict, verify_db_config: dict):
         self.linebot_db_config = linebot_db_config
-        self.verify_db_config = verify_config
+        self.verify_db_config = verify_db_config
 
     def _get_linebot_db_connection(self):
         return pymysql.connect(**self.linebot_db_config)
