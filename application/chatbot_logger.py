@@ -1,12 +1,12 @@
 # application/chatbot_logger.py
 from datetime import datetime
 
-from domain.event_log import EventEnum, EventLog
-from domain.message_log import MessageLog
+from domain.event_log import EventEnum, EventLog, EventLogRepository
+from domain.message_log import MessageLog, MessageLogRepository
 
 
 class ChatbotLogger:
-    def __init__(self, message_repo, event_repo):
+    def __init__(self, message_repo: MessageLogRepository, event_repo: EventLogRepository):
         self.message_repo = message_repo
         self.event_repo = event_repo
 
