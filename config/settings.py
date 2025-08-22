@@ -3,12 +3,12 @@ import os
 
 
 class BaseConfig:
-    USE_REAL_LINE = False
+    USE_REAL_LINE = "mock"
 
 
 class DevelopmentConfig(BaseConfig):
     FLASK_DEBUG = True
-    USE_REAL_LINE = os.getenv("USE_REAL_LINE", "false").lower() == "true"
+    USE_REAL_LINE = "real"
 
     @property
     def LINE_ACCESS_TOKEN(self):
@@ -94,7 +94,7 @@ class DevelopmentConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     FLASK_DEBUG = False
-    USE_REAL_LINE = True
+    USE_REAL_LINE = "real"
 
     LINE_ACCESS_TOKEN = os.getenv("PROD_LINE_TOKEN")
     LINE_CHANNEL_SECRET = os.getenv("PROD_LINE_SECRET")
@@ -167,7 +167,7 @@ class TestingConfig(DevelopmentConfig):
     繼承自 DevelopmentConfig 來複用資料庫等設定，但覆寫關鍵值。
     """
     TESTING = True
-    USE_REAL_LINE = False
+    USE_REAL_LINE = "mock"
 
     # 【關鍵】直接覆寫 LINE_CHANNEL_SECRET 為一個固定的字串
     # 不再使用 @property 或 os.getenv，讓測試行為完全確定

@@ -61,11 +61,9 @@ class AppContainer(containers.DeclarativeContainer):
 
     # 切換：容器對外只暴露 line_bot_api，一律透過這個 provider 取
     line_bot_api = providers.Selector(
-        config.USE_REAL_LINE,  # bool
-        **{
-            True: _real_line_bot_api,
-            False: _mock_line_bot_api,
-        }
+        config.USE_REAL_LINE,
+        real=_real_line_bot_api,
+        mock=_mock_line_bot_api,
     )
 
     line_api_service = providers.Factory(
