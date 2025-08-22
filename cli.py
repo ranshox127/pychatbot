@@ -36,7 +36,7 @@ def dev():
 
     if app.config.get("USE_REAL_LINE"):
         token = app.config["LINE_ACCESS_TOKEN"]
-        set_webhook(token, f"{url}/linebot/")
+        set_webhook(token, f"{url}/linebot/linebot/")
 
     app.run(port=DEV_PORT, debug=True)
 

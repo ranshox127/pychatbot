@@ -28,6 +28,8 @@ from containers import AppContainer
 @inject
 def handle_follow(
     event: FollowEvent,
+    destination: str,                # 👈 第二個位置參數用來接住 line-bot-sdk 傳進來的 destination
+    *,
     registration_service: RegistrationService = Provide[AppContainer.registration_service]
 ):
     user_id = event.source.user_id
@@ -37,6 +39,8 @@ def handle_follow(
 @inject
 def handle_message(
     event: MessageEvent,
+    destination: str,                # 👈 第二個位置參數用來接住 line-bot-sdk 傳進來的 destination
+    *,
     student_repository: StudentRepository = Provide[AppContainer.student_repo],
     registration_service: RegistrationService = Provide[AppContainer.registration_service],
     user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
@@ -82,7 +86,7 @@ def handle_message(
     elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
         pass
 
-    # 如果使用者處於閒置 (IDLE) 狀態，則根據「指令」處理
+    # 如果使用者並沒有在上述狀態進行特定的動作，則根據「指令」處理
     if text == "助教安安，我有問題!":
         ask_ta_service.start_inquiry(
             student=student, reply_token=event.reply_token)
@@ -173,8 +177,7 @@ def create_linebot_blueprint(container: AppContainer) -> Blueprint:
 
     # 手動註冊已經在模組層級定義好的、且被 @inject 修補過的函式
     handler.add(FollowEvent)(handle_follow)
-    handler.add(MessageEvent, message=TextMessageContent)(
-        handle_message)  # MessageEvent 註冊方式稍有不同
+    handler.add(MessageEvent, message=TextMessageContent)(handle_message)
     handler.add(PostbackEvent)(handle_postback)
 
     @linebot_bp.route('/linebot/', methods=['POST'])

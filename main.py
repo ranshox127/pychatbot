@@ -8,9 +8,6 @@ from config.settings import CONFIG_BY_NAME
 from containers import AppContainer
 from interfaces.linebot_route import create_linebot_blueprint
 
-DEV_PORT = 8095
-PROD_PORT = 8096
-
 
 def create_app():
     if os.getenv("FLASK_ENV", "production") != "production":
