@@ -135,6 +135,7 @@ class AppContainer(containers.DeclarativeContainer):
         student_repo=student_repo,
         course_repo=course_repo,
         moodle_repo=moodle_repo,
+        state_repo=user_state_repo,
         line_service=line_api_service,
         chatbot_logger=chatbot_logger
     )
