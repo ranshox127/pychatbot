@@ -1,7 +1,7 @@
 # interfaces/linebot_route.py
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, abort, current_app, request
-from linebot.v3 import WebhookHandler
+from linebot.v3 import WebhookParser
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import (FollowEvent, MessageEvent, PostbackEvent,
                                  TextMessageContent)
@@ -24,9 +24,12 @@ from containers import AppContainer
 #     "give_me_postback": get_postback
 # }
 
+# 1) 頂層 parser（先用 dummy secret），讓 @inject 能在模組載入時被 wire
+parser = WebhookParser("dummy-secret")
+
 
 @inject
-def handle_follow(
+def on_follow(
     event: FollowEvent,
     destination: str,                # 👈 第二個位置參數用來接住 line-bot-sdk 傳進來的 destination
     *,
@@ -37,7 +40,7 @@ def handle_follow(
 
 
 @inject
-def handle_message(
+def on_message(
     event: MessageEvent,
     destination: str,                # 👈 第二個位置參數用來接住 line-bot-sdk 傳進來的 destination
     *,
@@ -95,7 +98,7 @@ def handle_message(
 
 
 @inject
-def handle_postback(
+def on_postback(
     event: PostbackEvent,
     destination: str,                # 👈 第二個位置參數用來接住 line-bot-sdk 傳進來的 destination
     *,
@@ -166,30 +169,45 @@ def handle_postback(
         pass
 
 
+# 2) 自己的 dispatcher，把 parser 解析出來的 event 送到對應處理器
+def _dispatch(event, destination: str):
+    if isinstance(event, FollowEvent):
+        return on_follow(event, destination)
+    if isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
+        return on_message(event, destination)
+    if isinstance(event, PostbackEvent):
+        return on_postback(event, destination)
+    # 其他 event 類型略過
+
+    return
+
+
+# 3) blueprint 工廠：只負責「用真 secret 替換 parser」+ 解析/派發
 def create_linebot_blueprint(container: AppContainer) -> Blueprint:
-    """
-    建立、組裝並設定 Linebot 的 Flask Blueprint。
-    """
-    linebot_bp = Blueprint('linebot', __name__, url_prefix='/linebot')
+    bp = Blueprint("linebot", __name__, url_prefix="/linebot")
 
-    channel_secret = container.config.LINE_CHANNEL_SECRET()
-    handler = WebhookHandler(channel_secret)
+    # 換成真正的 secret（這一行就解決了你之前 handler.add 的雞生蛋問題）
+    real_secret = container.config.LINE_CHANNEL_SECRET()
+    global parser
+    parser = WebhookParser(real_secret)
 
-    # 手動註冊已經在模組層級定義好的、且被 @inject 修補過的函式
-    handler.add(FollowEvent)(handle_follow)
-    handler.add(MessageEvent, message=TextMessageContent)(handle_message)
-    handler.add(PostbackEvent)(handle_postback)
-
-    @linebot_bp.route('/linebot/', methods=['POST'])
+    @bp.route("/linebot/", methods=["POST"])
     def linebot():
-        signature = request.headers.get('X-Line-Signature')
+        signature = request.headers.get("X-Line-Signature")
         body = request.get_data(as_text=True)
         current_app.logger.info("Request body: " + body)
         try:
-            handler.handle(body, signature)
+            events = parser.parse(body, signature)
         except InvalidSignatureError:
             current_app.logger.warning("Invalid signature.")
             abort(400)
-        return 'OK'
 
-    return linebot_bp
+        # 你的測試 payload 都是單一 event；這裡仍健壯地逐一處理
+        # 注意：destination 需要從最外層 payload 讀；這裡用 Flask 的 request.json 拿
+        destination = (request.json or {}).get("destination", "")
+        for ev in events:
+            _dispatch(ev, destination)
+
+        return "OK"
+
+    return bp
