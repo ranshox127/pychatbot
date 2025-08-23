@@ -40,6 +40,7 @@ def ev_follow(user_id="U_TEST_USER_ID", reply_token="test_reply_token_123"):
         "mode": "active",
         "webhookEventId": "01GXXXXXXXXXXXXXXXXX",
         "deliveryContext": {"isRedelivery": False},
+        "follow": {"isUnblocked": False}
     }
 
 
