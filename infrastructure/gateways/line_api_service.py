@@ -1,17 +1,11 @@
 # infrastructure/gateways/line_api_service.py
 from typing import List
 
-import requests
 from linebot.v3.messaging import (Message, MessagingApi, PushMessageRequest,
                                   ReplyMessageRequest, TextMessage)
 
 
 class LineApiService:
-    """
-    封裝 LINE Messaging API 的 gateway。
-    專注於『怎麼傳』，不處理『傳什麼』與『為什麼傳』。
-    """
-
     def __init__(self, line_bot_api: MessagingApi, channel_access_token: str, line_rich_menus: dict):
         self.line_bot_api = line_bot_api
         self.channel_access_token = channel_access_token
@@ -57,22 +51,8 @@ class LineApiService:
 
         rich_menu_id = self.line_rich_menus.get(menu_alias)
         if not rich_menu_id:
-            print(f"[ERROR] No rich menu ID found for alias '{menu_alias}'")
             return
-
-        url = f"https://api.line.me/v2/bot/user/{user_id}/richmenu/{rich_menu_id}"
-        headers = {
-            "Authorization": f"Bearer {self.channel_access_token}"
-        }
-
-        response = requests.post(url, headers=headers)
-        if response.status_code != 200:
-            print(
-                f"[ERROR] Failed to link rich menu: {response.status_code} {response.text}")
-        else:
-            print(
-                f"[INFO] Successfully linked rich menu '{menu_alias}' to user '{user_id}'")
-
+        self.line_bot_api.link_rich_menu_id_to_user(user_id, rich_menu_id)
 
 class LineApiError(Exception):
     def __init__(self, status_code, response_text):

@@ -30,7 +30,7 @@ class RegistrationService:
         """
         student = self.student_repo.find_by_line_id(line_user_id)
         if student and student.is_registered():
-            self.line_service.link_rich_menu_to_user(line_user_id, 'main_menu')
+            self.line_service.link_rich_menu_to_user(line_user_id, 'main')
         else:
             self.line_service.reply_text_message(
                 reply_token, "請輸入學號，再開始交談喔，感謝你!")
