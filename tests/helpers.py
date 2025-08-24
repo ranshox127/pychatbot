@@ -47,7 +47,7 @@ def ev_follow(user_id="U_TEST_USER_ID", reply_token="test_reply_token_123"):
 def ev_message_text(text="Hello, world", user_id="U_TEST_USER_ID", reply_token="test_reply_token_123"):
     return {
         "type": "message",
-        "message": {"type": "text", "id": "14353798921116", "text": text},
+        "message": {"type": "text", "quoteToken": "q3Plxr4AgKd...", "id": "14353798921116", "text": text},
         "replyToken": reply_token,
         "source": {"userId": user_id, "type": "user"},
         "timestamp": 1609459200000,
