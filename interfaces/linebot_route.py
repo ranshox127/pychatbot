@@ -73,7 +73,7 @@ def on_message(
     message_log_id = chatbot_logger.log_message(
         student_id=student.student_id, message=text, context_title=student.context_title)
 
-    session_state = user_state_accessor.get_state(user_id).status
+    session_state = user_state_accessor.get_state(user_id)
 
     if session_state == UserStateEnum.AWAITING_LEAVE_REASON:
         leave_service.submit_leave_reason(
