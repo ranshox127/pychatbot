@@ -1,4 +1,5 @@
 # infrastructure/mysql_student_repository.py
+from enum import Enum
 from typing import Optional
 
 import pymysql
@@ -42,6 +43,10 @@ class MySQLStudentRepository(StudentRepository):
                 return self._map_row_to_student(row) if row else None
 
     def save(self, student: Student) -> None:
+        def _to_roleid(val) -> int:
+            if isinstance(val, Enum):
+                return int(val.value)
+            return int(val)
         sql = """
             INSERT INTO account_info (student_ID, line_userID, mdl_ID, student_name, context_title, roleid, del)
             VALUES (%s, %s, %s, %s, %s, %s, 0)
@@ -56,7 +61,7 @@ class MySQLStudentRepository(StudentRepository):
             with conn.cursor() as cur:
                 cur.execute(sql, (
                     student.student_id, student.line_user_id, student.mdl_id,
-                    student.name, student.context_title, student.role.value
+                    student.name, student.context_title, _to_roleid(student.role)
                 ))
             conn.commit()
 
