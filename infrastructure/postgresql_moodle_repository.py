@@ -55,33 +55,31 @@ class PostgreSQLMoodleRepository(MoodleRepository):
             # 將查詢結果映射到我們定義的 DTO 列表
             return [MoodleEnrollment(course_fullname=row[0], roleid=row[1], user_id=row[2], fullname=row[3]) for row in rows]
 
-    def find_student_info(self, course_fullname: str, student_id: str) -> Optional[dict]:
+    def find_student_info(self, student_id: str) -> Optional[dict]:
         """
-        根據 Moodle 課程名稱與學生帳號（可能為 username 或 username@開頭）查找該學生資訊。
+        根據 學生帳號（可能為 username 或 username@開頭）查找該學生資訊。
         """
         with self.conn_mgr.get_cursor() as cur:
             sql = """
-            SELECT DISTINCT usr.id AS user_id,
-                    usr.username,
-                    CONCAT(usr.lastname, usr.firstname) AS fullname,
-                    ra.roleid
-            FROM mdl_course AS cour
-            JOIN mdl_enrol AS enrol ON cour.id = enrol.courseid
-            JOIN mdl_user_enrolments AS ue ON enrol.id = ue.enrolid
-            JOIN mdl_user AS usr ON ue.userid = usr.id
-            JOIN mdl_role_assignments AS ra ON ra.userid = usr.id
-            JOIN mdl_context AS context ON context.id = ra.contextid AND context.instanceid = cour.id
-            WHERE cour.fullname = %s
-                AND (usr.username = %s OR usr.username LIKE %s)
-            ORDER BY ra.roleid
+            SELECT
+                usr.id,
+                usr.username,
+                CONCAT(usr.lastname, usr.firstname) AS fullname
+            FROM mdl_user AS usr
+            WHERE usr.username = %s OR usr.username LIKE %s
             LIMIT 1;
             """
+
             cur.execute(
-                sql, (course_fullname, student_id, student_id + '@%'))
+                sql, (student_id, student_id + '@%'))
             row = cur.fetchone()
             if not row:
                 return None
-            return MoodleEnrollment(course_fullname=row[0], roleid=row[3], user_id=row[1].split('@')[0], fullname=row[2])
+            return {
+                "id": row[0],
+                "student_id": row[1],
+                "fullname": row[2]
+            }
 
 
 class LazyMoodleConnectionManager:
@@ -100,6 +98,10 @@ class LazyMoodleConnectionManager:
     def __init__(self, db_config, ssh_config, idle_timeout=60):
         self.db_config = db_config
         self.ssh_config = ssh_config
+        
+        self.db_config['port'] = int(self.db_config.get('port', 5432))
+        self.ssh_config['ssh_port'] = int(self.ssh_config.get('ssh_port', 22))
+        
         self.idle_timeout = idle_timeout
         self.lock = Lock()
         self._conn = None

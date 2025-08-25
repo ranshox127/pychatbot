@@ -14,7 +14,7 @@ class MoodleEnrollment:
 
 class MoodleRepository(ABC):
     @abstractmethod
-    def find_student_info(self, course_fullname: str, student_id: str) -> Optional[dict]:
+    def find_student_info(self, student_id: str) -> Optional[dict]:
         pass
 
     @abstractmethod
