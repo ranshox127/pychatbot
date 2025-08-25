@@ -30,6 +30,7 @@ def linebot_mysql_truncate(container):
         cur.execute("TRUNCATE TABLE message_logs")          # 如果會寫入
         cur.execute("TRUNCATE TABLE event_logs")            # 如果會寫入
         cur.execute("TRUNCATE TABLE change_HW_deadline")   # 會被 course repo 用到
+        cur.execute("TRUNCATE TABLE ask_for_leave")  # ← 新增
         cur.execute("SET FOREIGN_KEY_CHECKS=1")
     yield conn
     # 測試完畢後保持乾淨（可選）
@@ -41,6 +42,7 @@ def linebot_mysql_truncate(container):
         cur.execute("TRUNCATE TABLE message_logs")
         cur.execute("TRUNCATE TABLE event_logs")
         cur.execute("TRUNCATE TABLE change_HW_deadline")
+        cur.execute("TRUNCATE TABLE ask_for_leave")  # ← 新增
         cur.execute("SET FOREIGN_KEY_CHECKS=1")
     conn.close()
 
