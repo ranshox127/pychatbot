@@ -2,8 +2,8 @@
 modb.find_student_enrollments('jz1452896')
 > [MoodleEnrollment(course_fullname='1121_創意學習_楊鎮華教師', roleid=5, user_id=26963, fullname='張金騏'), MoodleEnrollment(course_fullname='1122_智慧型網路服務工程_楊鎮華教師', roleid=5, user_id=26963, fullname='張金騏'), MoodleEnrollment(course_fullname='1122_程式設計-Python_黃鈺晴教師', roleid=5, user_id=26963, fullname='張金騏'), MoodleEnrollment(course_fullname='1112_程式設計-Python_黃鈺晴教師', roleid=4, user_id=26963, fullname='張金騏'), MoodleEnrollment(course_fullname='1131_程式設計-Python_黃鈺晴教師', roleid=4, user_id=26963, fullname='張金騏'), MoodleEnrollment(course_fullname='1132_程式設計-Python_黃鈺晴教師', roleid=4, user_id=26963, fullname='張金騏')]
 
-modb.find_student_info('1132_程式設計-Python_黃鈺晴教師', '113409023')
-> MoodleEnrollment(course_fullname=28672, roleid=5, user_id='113409023', fullname='柯鈞泰')
+modb.find_student_info("113409023")
+> {'id': 28672, 'student_id': '113409023', 'fullname': '柯鈞泰'}
 """
 # uv run -m pytest tests/infrastructure/test_postgresql_moodle_repository.py
 from unittest.mock import patch, MagicMock
