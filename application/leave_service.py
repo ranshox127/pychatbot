@@ -1,5 +1,7 @@
 from application.chatbot_logger import ChatbotLogger
-from application.mail_carrier import MailCarrier, LeaveEmailContent
+from application.mail_carrier import LeaveEmailContent, MailCarrier
+from application.message_builders.leave_builders import \
+    LeaveConfirmationBuilder
 from application.user_state_accessor import UserStateAccessor
 from domain.course import CourseRepository
 from domain.event_log import EventEnum
@@ -7,7 +9,6 @@ from domain.leave_request import LeaveRequest, LeaveRequestRepository
 from domain.student import Student
 from domain.user_state import UserStateEnum
 from infrastructure.gateways.line_api_service import LineApiService
-from application.message_builders.leave_builders import LeaveConfirmationBuilder
 
 
 class LeaveService:
