@@ -50,7 +50,8 @@ def on_message(
     ask_ta_service: AskTAService = Provide[AppContainer.ask_ta_service],
     check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
     leave_service: LeaveService = Provide[AppContainer.leave_service],
-    chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
+    chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger],
+    mistake_review_sheet_url: str = Provide[AppContainer.config.MISTAKE_REVIEW_SHEET_URL]
 ):
     user_id = event.source.user_id
     text = event.message.text.strip()
@@ -85,7 +86,7 @@ def on_message(
         return
     elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
         check_score_service.check_score(
-            student=student, reply_token=event.reply_token, target_content=text, message_log_id=message_log_id)
+            student=student, reply_token=event.reply_token, target_content=text, mistake_review_sheet_url=mistake_review_sheet_url, message_log_id=message_log_id)
     elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
         pass
 

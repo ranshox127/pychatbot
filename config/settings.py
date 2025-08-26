@@ -90,6 +90,8 @@ class DevelopmentConfig(BaseConfig):
         "main": "richmenu-2098cb2a534de65d2d1138b9210dbffe",
         "register": "richmenu-4667fcc9e76820a929220d8af84d3b2a"
     }
+    
+    MISTAKE_REVIEW_SHEET_URL = os.getenv("MISTAKE_REVIEW_SHEET_URL")
 
 
 class ProductionConfig(BaseConfig):
@@ -157,6 +159,8 @@ class ProductionConfig(BaseConfig):
         "main": "richmenu-aaaaaaaaaaaa",
         "register": "richmenu-bbbbbbbbbbbb"
     }
+    
+    MISTAKE_REVIEW_SHEET_URL = os.getenv("MISTAKE_REVIEW_SHEET_URL")
 
 # 【新增】為測試環境建立一個專屬的設定類別
 
