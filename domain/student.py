@@ -65,3 +65,9 @@ class StudentRepository(ABC):
     @abstractmethod
     def save(self, student: Student) -> None:
         pass
+
+
+class StudentIdAlreadyBoundError(Exception):
+    def __init__(self, student_id: str):
+        super().__init__(f"student_id already bound: {student_id}")
+        self.student_id = student_id

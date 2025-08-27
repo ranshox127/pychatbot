@@ -1,6 +1,6 @@
 # application/registration_service.py
 from application.chatbot_logger import ChatbotLogger
-from domain.student import Student, StudentRepository
+from domain.student import Student, StudentRepository, StudentIdAlreadyBoundError
 from domain.moodle_enrollment import MoodleRepository
 from domain.course import CourseRepository
 from domain.user_state import UserState, UserStateRepository
@@ -42,10 +42,14 @@ class RegistrationService:
         2. 從教學平台驗證學號
         """
 
-        # 1. 檢查學號是否已被他人綁定
-        if self.student_repo.find_by_student_id(student_id_input):
-            self.line_service.reply_text_message(
-                reply_token, "此學號已被其他 Line 帳號使用，請洽詢助教。")
+        # 1. 檢查學號是否已被他人綁定: 事前查詢（快路徑），但不可靠；仍要在寫入時把關
+        existing = self.student_repo.find_by_student_id(student_id_input)
+        if existing:
+            if existing.line_user_id == line_user_id:
+                self.line_service.reply_text_message(reply_token, "你已經完成綁定囉！")
+            else:
+                self.line_service.reply_text_message(
+                    reply_token, "此學號已被其他 Line 帳號使用，請洽詢助教。")
             return
 
         # 2. 從教學平台驗證學號
@@ -86,7 +90,12 @@ class RegistrationService:
         )
 
         # 5. 透過倉儲保存
-        self.student_repo.save(new_student)
+        try:
+            self.student_repo.save(new_student)
+        except StudentIdAlreadyBoundError:
+            self.line_service.reply_text_message(
+                reply_token, "此學號已被其他 Line 帳號使用，請洽詢助教。")
+            return
 
         # 6. 為該學生在資料表中創建欄位
         self.state_repo.save(UserState(line_user_id=line_user_id))
@@ -96,7 +105,7 @@ class RegistrationService:
                                       message_log_id=-1, problem_id=None, hw_id=None, context_title=new_student.context_title)
 
         # 8. 執行註冊後的動作
-        self.line_service.link_rich_menu_to_user(line_user_id, 'main_menu')
+        self.line_service.link_rich_menu_to_user(line_user_id, 'main')
 
         self.line_service.reply_text_message(
             reply_token, f"{new_student.name}，很高興認識你! 你目前被綁定的課程為: {new_student.context_title}，如果名字或課程有誤請找助教反應。")

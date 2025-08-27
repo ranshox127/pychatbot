@@ -3,8 +3,9 @@ from enum import Enum
 from typing import Optional
 
 import pymysql
+from pymysql.err import IntegrityError
 
-from domain.student import RoleEnum, Student, StudentStatus, StudentRepository
+from domain.student import RoleEnum, Student, StudentStatus, StudentRepository, StudentIdAlreadyBoundError
 
 
 class MySQLStudentRepository(StudentRepository):
@@ -44,26 +45,28 @@ class MySQLStudentRepository(StudentRepository):
 
     def save(self, student: Student) -> None:
         def _to_roleid(val) -> int:
-            if isinstance(val, Enum):
-                return int(val.value)
-            return int(val)
+            return int(val.value) if isinstance(val, Enum) else int(val)
+
         sql = """
-            INSERT INTO account_info (student_ID, line_userID, mdl_ID, student_name, context_title, roleid, del)
+            INSERT INTO account_info
+                (student_ID, line_userID, mdl_ID, student_name, context_title, roleid, del)
             VALUES (%s, %s, %s, %s, %s, %s, 0)
-            ON DUPLICATE KEY UPDATE 
-                mdl_ID = VALUES(mdl_ID), 
-                student_name = VALUES(student_name),
-                context_title = VALUES(context_title),
-                roleid = VALUES(roleid),
-                del = 0;
+            -- ★ 不要 upsert，讓 DB 丟 1062 才能被上層看見衝突
         """
         with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (
-                    student.student_id, student.line_user_id, student.mdl_id,
-                    student.name, student.context_title, _to_roleid(student.role)
-                ))
-            conn.commit()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (
+                        student.student_id, student.line_user_id, student.mdl_id,
+                        student.name, student.context_title, _to_roleid(
+                            student.role)
+                    ))
+                conn.commit()
+            except IntegrityError as e:
+                # 1062: duplicate key（需有 UNIQUE(student_ID)）
+                if e.args and e.args[0] == 1062:
+                    raise StudentIdAlreadyBoundError(student.student_id) from e
+                raise
 
     def _map_row_to_student(self, row: dict) -> Student:
         return Student(
