@@ -1,4 +1,11 @@
 # interfaces/linebot_route.py
+import atexit
+import base64
+import hashlib
+import hmac
+import json
+from concurrent.futures import ThreadPoolExecutor
+
 from dependency_injector.wiring import Provide, inject
 from flask import Blueprint, abort, current_app, request
 from linebot.v3 import WebhookParser
@@ -6,17 +13,17 @@ from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import (FollowEvent, MessageEvent, PostbackEvent,
                                  TextMessageContent)
 
+from application.ask_TA_service import AskTAService
+from application.chatbot_logger import ChatbotLogger
+from application.check_attendance_service import CheckAttendanceService
+from application.check_score_service import CheckScoreService
+from application.leave_service import LeaveService
 # Import service classes just for type hinting
 from application.registration_service import RegistrationService
 from application.user_state_accessor import UserStateAccessor
-from application.ask_TA_service import AskTAService
-from application.leave_service import LeaveService
-from application.check_attendance_service import CheckAttendanceService
-from application.check_score_service import CheckScoreService
-from application.chatbot_logger import ChatbotLogger
+from containers import AppContainer
 from domain.student import StudentRepository
 from domain.user_state import UserStateEnum
-from containers import AppContainer
 
 # command_handlers = {
 #     "助教安安，我有問題!": handle_student_help,
@@ -24,8 +31,8 @@ from containers import AppContainer
 #     "give_me_postback": get_postback
 # }
 
-# 1) 頂層 parser（先用 dummy secret），讓 @inject 能在模組載入時被 wire
-parser = WebhookParser("dummy-secret")
+
+_EXECUTOR = None
 
 
 @inject
@@ -184,31 +191,80 @@ def _dispatch(event, destination: str):
 
 
 # 3) blueprint 工廠：只負責「用真 secret 替換 parser」+ 解析/派發
-def create_linebot_blueprint(container: AppContainer) -> Blueprint:
-    bp = Blueprint("linebot", __name__, url_prefix="/linebot")
+def _valid_signature(secret: str, body: str, sig: str | None) -> bool:
+    if not sig:
+        return False
+    mac = hmac.new(secret.encode("utf-8"), body.encode("utf-8"),
+                   hashlib.sha256).digest()
+    expected = base64.b64encode(mac).decode("utf-8")
+    return hmac.compare_digest(sig, expected)
 
-    # 換成真正的 secret（這一行就解決了你之前 handler.add 的雞生蛋問題）
-    real_secret = container.config.LINE_CHANNEL_SECRET()
-    global parser
-    parser = WebhookParser(real_secret)
 
-    @bp.route("/linebot/", methods=["POST"])
-    def linebot():
-        signature = request.headers.get("X-Line-Signature")
-        body = request.get_data(as_text=True)
-        current_app.logger.info("Request body: " + body)
+def _get_executor(app):
+    global _EXECUTOR
+    if _EXECUTOR is None:
+        workers = int(app.config.get("LINE_EXECUTOR_WORKERS", 4))
+        _EXECUTOR = ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="linebot-bg")
+        atexit.register(lambda: _EXECUTOR and _EXECUTOR.shutdown(
+            wait=False, cancel_futures=True))
+        app.logger.info("LINE executor started (workers=%s)", workers)
+    return _EXECUTOR
+
+
+# ✅ 背景執行緒內「用 SDK 解析出事件物件」，再交給 _dispatch
+def _process_payload_in_bg(app, body: str, signature: str):
+    with app.app_context():
         try:
+            # 用真 secret 建 parser（避免全域 parser 秘密不同步）
+            parser = WebhookParser(app.config["LINE_CHANNEL_SECRET"])
+            # ← 產生 FollowEvent / MessageEvent / PostbackEvent 物件
             events = parser.parse(body, signature)
+
+            # 目的地在原始 body 裡，事件物件沒有這個欄位
+            destination = (json.loads(body) or {}).get("destination", "")
+
+            app.logger.info("BG start: events=%d", len(events))
+            for ev in events:
+                # ← 現在 isinstance 會成立，handlers 會被呼叫
+                _dispatch(ev, destination)
+            app.logger.info("BG done: events=%d", len(events))
+
         except InvalidSignatureError:
-            current_app.logger.warning("Invalid signature.")
-            abort(400)
+            app.logger.warning("BG invalid signature; dropped")
+        except Exception as e:
+            app.logger.exception("Background processing failed: %s", e)
 
-        # 你的測試 payload 都是單一 event；這裡仍健壯地逐一處理
-        # 注意：destination 需要從最外層 payload 讀；這裡用 Flask 的 request.json 拿
-        destination = (request.json or {}).get("destination", "")
-        for ev in events:
-            _dispatch(ev, destination)
 
-        return "OK"
+def create_linebot_blueprint(container):
+    bp = Blueprint("linebot", __name__)
+
+    @bp.post("/linebot/linebot/")
+    def webhook():
+        try:
+            secret = current_app.config["LINE_CHANNEL_SECRET"]
+            body = request.get_data(as_text=True)
+            sig = request.headers.get("X-Line-Signature")
+
+            if not _valid_signature(secret, body, sig):
+                current_app.logger.warning("Invalid signature")
+                abort(400)
+
+            ex = _get_executor(current_app._get_current_object())
+            current_app.logger.info("SUBMIT payload len=%d", len(body))
+            # ✅ 把 signature 一起傳進背景，讓 parser.parse 使用
+            ex.submit(_process_payload_in_bg,
+                      current_app._get_current_object(), body, sig)
+            return "", 200
+
+        except Exception as e:
+            current_app.logger.exception("webhook failed: %s", e)
+            # 臨時 fallback（便於過渡調試；確定穩定後可移除）
+            try:
+                _process_payload_in_bg(
+                    current_app._get_current_object(), body, sig)
+                return "", 200
+            except Exception:
+                return "", 500
 
     return bp
