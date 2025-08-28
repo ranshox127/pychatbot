@@ -1,48 +1,13 @@
 # uv run -m pytest tests/interfaces/test_operation_flow.py
-# uv run -m pytest tests/interfaces/test_operation_flow.py::test_register_duplicate_student_id -s
-from types import SimpleNamespace
+# uv run -m pytest tests/interfaces/test_operation_flow.py::test_leave_full_flow -s
 import pytest
 
 from application.check_score_service import CheckScoreService
 from domain.event_log import EventEnum
 from domain.user_state import UserStateEnum
 from tests.helpers import (ev_follow, ev_message_text, ev_postback,
-                           make_base_envelope, post_line_event)
-
-
-class FakeMoodleRepo:
-    """最小可行的 Moodle stub，符合 RegistrationService 會用到的兩個方法。"""
-
-    def __init__(self, *, student_id: str, fullname: str, course_fullname: str, roleid: int = 5, user_id: int = 999):
-        self._student_id = student_id
-        self._fullname = fullname
-        self._course_fullname = course_fullname
-        self._roleid = roleid
-        self._user_id = user_id
-
-    def find_student_info(self, student_id: str):
-        # 回傳類似 Enrollment 的東西，只要屬性名字對得上就行
-        if student_id == self._student_id:
-            return SimpleNamespace(
-                user_id=self._user_id,
-                fullname=self._fullname,
-                course_fullname=self._course_fullname,
-                roleid=self._roleid,
-            )
-        return None
-
-    def find_student_enrollments(self, student_id: str):
-        # 回傳多門課也行；至少包含你在 MySQL 中 seed 的那一門
-        if student_id != self._student_id:
-            return []
-        return [
-            SimpleNamespace(
-                user_id=self._user_id,
-                fullname=self._fullname,
-                course_fullname=self._course_fullname,
-                roleid=self._roleid,
-            )
-        ]
+                           make_base_envelope, post_line_event, wait_for)
+from tests.fixtures.fakes import FakeMoodleRepo
 
 
 @pytest.fixture
@@ -101,13 +66,18 @@ def test_register_success(client, app, container, seed_course_commit):
         resp, _ = post_line_event(client, app, payload)
         assert resp.status_code == 200
 
-    # 驗證資料庫真的寫入
-    student_repo = container.student_repo()
-    student = student_repo.find_by_line_id("test_id")
-    assert student is not None
-    assert student.student_id == student_id
-    assert student.name == fullname
-    assert student.context_title == course_title
+        # 驗證資料庫真的寫入
+        student_repo = container.student_repo()
+
+        def _get():  # 小工具避免重複
+            return student_repo.find_by_line_id("test_id")
+
+        assert wait_for(lambda: _get() is not None), "背景處理逾時，仍查不到註冊資料"
+
+        student = _get()
+        assert student.student_id == student_id
+        assert student.name == fullname
+        assert student.context_title == course_title
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
@@ -305,8 +275,10 @@ def test_leave_full_flow(client, app, container, seed_student_commit, mail_spy, 
             "[Action]confirm_to_leave", user_id=line_user_id))
     )
     assert resp.status_code == 200
-    assert user_state.get_state(
-        line_user_id) == UserStateEnum.AWAITING_LEAVE_REASON
+    assert wait_for(
+        lambda: user_state.get_state(
+            line_user_id) == UserStateEnum.AWAITING_LEAVE_REASON
+    ), f"state={user_state.get_state(line_user_id)}"
 
     # 3) 輸入理由 → 回到 IDLE，寫入 DB，並（若課程開啟）寄信
     resp, _ = post_line_event(
@@ -315,22 +287,26 @@ def test_leave_full_flow(client, app, container, seed_student_commit, mail_spy, 
             text=reason_text, user_id=line_user_id))
     )
     assert resp.status_code == 200
-    assert user_state.get_state(line_user_id) == UserStateEnum.IDLE
+    assert wait_for(
+        lambda: user_state.get_state(line_user_id) == UserStateEnum.IDLE
+    ), f"state={user_state.get_state(line_user_id)}"
 
-    # Assert：DB 紀錄
+    # DB：等到請假紀錄出現
+    assert wait_for(lambda: fetch_leave(student_id) is not None), "應該產生一筆請假紀錄"
     row = fetch_leave(student_id)
-    assert row is not None, "應該產生一筆請假紀錄"
     assert row["student_ID"] == student_id
     assert row["reason"] == reason_text
     assert row["context_title"] == context_title
 
-    # Assert：寄信（課程 leave_notice=1）
-    assert len(mail_spy.sent) == 1
+    # 寄信（課程 leave_notice=1）
+    assert wait_for(lambda: len(mail_spy.sent) ==
+                    1), f"mail_spy.sent={mail_spy.sent}"
     assert isinstance(mail_spy.sent[0]["to"], (list, tuple)) and len(
         mail_spy.sent[0]["to"]) >= 1
 
-    # Assert：repo 有被呼叫一次
-    assert leave_repo_spy.calls == 1
+    # repo 被呼叫一次
+    assert wait_for(lambda: leave_repo_spy.calls ==
+                    1), f"calls={leave_repo_spy.calls}"
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
