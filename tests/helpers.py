@@ -3,6 +3,7 @@ import json
 import hmac
 import hashlib
 import base64
+import time
 from typing import Dict, Any
 
 
@@ -20,6 +21,15 @@ def post_line_event(client, app, payload: Dict[str, Any], path: str = "/linebot/
     resp = client.post(path, data=body_str, headers=headers)
     return resp, body_str
 
+
+def wait_for(cond, timeout=8.0, interval=0.02):
+    """Poll until cond() is True or timeout seconds have elapsed."""
+    deadline = time.time() + float(timeout)
+    while time.time() < deadline:
+        if cond():
+            return True
+        time.sleep(interval)
+    return False
 
 # ---------- Payload Builders ----------
 
