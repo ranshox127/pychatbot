@@ -6,8 +6,18 @@ from linebot.v3.messaging import (
     MessagingApi,
 )
 
+from application.GenAI_feedback_service import GenAIFeedbackService, OpenAIClient
+from application.grader_client import GraderClient
+from application.suggestion_service import SuggestionService
+from application.summary_usecases.get_suggestion import GetSuggestionUseCase
+from application.summary_usecases.grade_batch import GradeBatchUseCase
+from application.summary_usecases.grade_single import GradeSingleUseCase
+from infrastructure.mysql_feedback_push_repository import MySQLFeedbackPushRepository
+from infrastructure.mysql_feedback_repository import MySQLFeedbackRepository
+from infrastructure.mysql_grading_log_repository import MySQLGradingLogRepository
 from infrastructure.mysql_student_repository import MySQLStudentRepository
 from infrastructure.mysql_course_repository import MySQLCourseRepository
+from infrastructure.mysql_suggestion_query_repository import MySQLSuggestionQueryRepository
 from infrastructure.postgresql_moodle_repository import PostgreSQLMoodleRepository
 from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
 from infrastructure.mysql_message_log_repository import MySQLMessageLogRepository
@@ -115,6 +125,28 @@ class AppContainer(containers.DeclarativeContainer):
         db_config=config.OJ_DB_CONFIG,
         ssh_config=config.OJ_SSH_CONFIG
     )
+    
+    grading_logs_repo = providers.Factory(
+        MySQLGradingLogRepository,
+        linebot_db_config=config.LINEBOT_DB_CONFIG,
+        verify_db_config=config.VERIFY_DB_CONFIG
+    )
+    
+    pushes_repo = providers.Factory(
+        MySQLFeedbackPushRepository,
+        linebot_db_config=config.LINEBOT_DB_CONFIG
+    )
+    
+    suggestion_repo = providers.Factory(
+        MySQLSuggestionQueryRepository,
+        linebot_db_config=config.LINEBOT_DB_CONFIG,
+        verify_db_config=config.VERIFY_DB_CONFIG
+    )
+    
+    feedback_repo = providers.Factory(
+        MySQLFeedbackRepository,
+        verify_db_config=config.VERIFY_DB_CONFIG
+    )
 
     # 4. Service Providers (Application)
     # The container automatically wires the dependencies together.
@@ -170,6 +202,70 @@ class AppContainer(containers.DeclarativeContainer):
         user_state_accessor=user_state_accessor,
         score_aggregator=score_aggregator,
         line_service=line_api_service,
+        chatbot_logger=chatbot_logger
+    )
+    
+    openai_client = providers.Factory(
+        OpenAIClient,
+        client=config.SUMMARY_OPENAI_KEY
+    )
+    
+    feedbacker = providers.Factory(
+        GenAIFeedbackService,
+        openai_client = openai_client,
+        student_repo = student_repo,
+        grading_logs_repo = grading_logs_repo
+    )
+    
+    suggestion_service = providers.Factory(
+        SuggestionService,
+        suggestion_repo=suggestion_repo
+    )
+    
+    grading_port_provider = providers.Factory(
+        GraderClient,
+        base_url=config.GRADER_BASE_URL,
+        api_key=config.GRADER_API_KEY,
+        line_service=line_api_service,
+        course_repo=course_repo,
+        grading_logs_repo=grading_logs_repo,
+        suggestion_repo=suggestion_repo,
+        feedbacker=feedbacker,
+        mail_carrier=mail_carrier,
+        user_state_accessor=user_state_accessor,
+        chatbot_logger=chatbot_logger
+    )
+    
+    get_suggestion_use_case = providers.Factory(
+        GetSuggestionUseCase,
+        grading_logs_repo=grading_logs_repo,
+        suggestion_repo=suggestion_repo,
+        suggestion_service=suggestion_service,
+        line_service=line_api_service,
+        chatbot_logger=chatbot_logger
+    )
+    
+    grade_single_use_case = providers.Factory(
+        GradeSingleUseCase,
+        grading_port=grading_port_provider,
+        suggestion_repo=suggestion_repo,
+        course_repo=course_repo,
+        line_service=line_api_service,
+        mail_carrier=mail_carrier,
+        feedbacker=feedbacker,
+        suggestion_service=suggestion_service,
+        chatbot_logger=chatbot_logger
+    )
+    
+    grade_batch_use_case = providers.Factory(
+        GradeBatchUseCase,
+        grading_port=grading_port_provider,
+        suggestion_repo=suggestion_repo,
+        pushes_repo=pushes_repo,
+        student_repo=student_repo,
+        line_service=line_api_service,
+        feedbacker=feedbacker,
+        suggestion_service=suggestion_service,
         chatbot_logger=chatbot_logger
     )
 

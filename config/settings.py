@@ -4,6 +4,19 @@ import os
 
 class BaseConfig:
     USE_REAL_LINE = "mock"
+    
+    @property
+    def GRADER_BASE_URL(self) -> str:
+        # 預設本機
+        return os.getenv("GRADER_BASE_URL", "http://127.0.0.1:8097")
+
+    @property
+    def GRADER_API_KEY(self) -> str:
+        return os.getenv("GRADER_API_KEY", "dev-162-key")
+    
+    @property
+    def SUMMARY_OPENAI_KEY(self) -> str:
+        return os.getenv("SUMMARY_API_KEY", "")
 
 
 class DevelopmentConfig(BaseConfig):
@@ -161,6 +174,20 @@ class ProductionConfig(BaseConfig):
     }
     
     MISTAKE_REVIEW_SHEET_URL = os.getenv("MISTAKE_REVIEW_SHEET_URL")
+    
+    @property
+    def GRADER_BASE_URL(self) -> str:
+        v = os.getenv("GRADER_BASE_URL")
+        if not v:
+            raise RuntimeError("GRADER_BASE_URL is required in production")
+        return v
+
+    @property
+    def GRADER_API_KEY(self) -> str:
+        v = os.getenv("GRADER_API_KEY")
+        if not v:
+            raise RuntimeError("GRADER_API_KEY is required in production")
+        return v
 
 # 【新增】為測試環境建立一個專屬的設定類別
 
