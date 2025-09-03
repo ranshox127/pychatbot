@@ -7,7 +7,8 @@ from flask import Flask
 from config.settings import CONFIG_BY_NAME
 from containers import AppContainer
 from interfaces.linebot_route import create_linebot_blueprint
-
+from interfaces.grade_batch_route import grade_batch_bp
+from interfaces.summary_feedback_verify_route import summary_feedback_verify_bp
 
 def create_app():
     if os.getenv("FLASK_ENV", "production") != "production":
@@ -28,6 +29,8 @@ def create_app():
 
     # 再建立並註冊 blueprint
     app.register_blueprint(create_linebot_blueprint(container))
+    app.register_blueprint(grade_batch_bp)
+    app.register_blueprint(summary_feedback_verify_bp)
 
     app.container = container
     return app
