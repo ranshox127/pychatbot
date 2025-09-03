@@ -17,13 +17,18 @@ from application.ask_TA_service import AskTAService
 from application.chatbot_logger import ChatbotLogger
 from application.check_attendance_service import CheckAttendanceService
 from application.check_score_service import CheckScoreService
+from application.grader_client import GraderClient
 from application.leave_service import LeaveService
 # Import service classes just for type hinting
 from application.registration_service import RegistrationService
+from application.summary_usecases.get_suggestion import GetSuggestionUseCase
+from application.summary_usecases.grade_single import GradeSingleUseCase
 from application.user_state_accessor import UserStateAccessor
 from containers import AppContainer
 from domain.student import StudentRepository
 from domain.user_state import UserStateEnum
+
+from interfaces.postback_parser import parse_postback
 
 # command_handlers = {
 #     "助教安安，我有問題!": handle_student_help,
@@ -95,9 +100,7 @@ def on_message(
         check_score_service.check_score(
             student=student, reply_token=event.reply_token, target_content=text, mistake_review_sheet_url=mistake_review_sheet_url, message_log_id=message_log_id)
     elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
-        pass
-
-    # 如果使用者並沒有在上述狀態進行特定的動作，則根據「指令」處理
+        user_state_accessor.set_state(user_id, UserStateEnum.IDLE)
     if text == "助教安安，我有問題!":
         ask_ta_service.start_inquiry(
             student=student, reply_token=event.reply_token)
@@ -116,7 +119,10 @@ def on_postback(
     check_score_service: CheckScoreService = Provide[AppContainer.check_score_service],
     user_state_accessor: UserStateAccessor = Provide[AppContainer.user_state_accessor],
     leave_service: LeaveService = Provide[AppContainer.leave_service],
-    chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger]
+    chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger],
+    grading_port_provider: GraderClient = Provide[AppContainer.grading_port_provider],
+    get_suggestion_usecase: GetSuggestionUseCase = Provide[AppContainer.get_suggestion_usecase],
+    grade_single_use_case: GradeSingleUseCase = Provide[AppContainer.grade_single_use_case]
 ):
     """
     main menu:
@@ -142,42 +148,78 @@ def on_postback(
 
     student = student_repository.find_by_line_id(user_id)
 
-    postback_action = event.postback.data
+    data = event.postback.data
+    parsed = parse_postback(data)
 
     message_log_id = chatbot_logger.log_message(
-        student_id=student.student_id, message=postback_action, context_title=student.context_title)
+        student_id=student.student_id, message=data, context_title=student.context_title)
 
-    if postback_action == 'apply_leave':
+    if parsed.action == 'apply_leave':
         leave_service.apply_for_leave(
             student=student, reply_token=event.reply_token)
 
-    elif postback_action == 'fetch_absence_info':
+    elif parsed.action == 'fetch_absence_info':
         check_attendance_service.check_attendance(
             student=student, reply_token=event.reply_token)
 
-    elif postback_action == 'check_homework':
+    elif parsed.action == 'check_homework':
         check_score_service.check_publish_contents(
             student=student, reply_token=event.reply_token)
 
-    elif postback_action == '[Action]confirm_to_leave':
+    elif parsed.action == 'action:confirm_leave':
         leave_service.ask_leave_reason(
             student=student, reply_token=event.reply_token, message_log_id=message_log_id)
 
-    elif postback_action == '[Action]cancel_to_leave':
+    elif parsed.action == 'action:cancel':
         user_state_accessor.set_state(
             student.line_user_id, UserStateEnum.IDLE)
 
-    elif postback_action == '[INFO]get_summary_grading':
-        pass
-    elif postback_action == '[INFO]summary_re-gradding':
-        pass
-    elif postback_action == '[INFO]summary_re-gradding_by_TA':
-        pass
-    elif postback_action == '[INFO]summary_re-gradding_by_TA_check':
-        pass
+    # ====== 這裡是「summary」相關三顆按鈕 ======
+    if parsed.ns == "summary":
+        contents_name = parsed.contents_name
 
+        if parsed.action == 'get_grade':
+            # 這支等於「查看評分/建議」
+            get_suggestion_usecase.exec(
+                student=student,
+                contents_name=contents_name,
+                reply_token=event.reply_token,
+                message_log_id=message_log_id
+            )
+            return
+
+        if parsed.action == 're_grade':
+            # 重新評分（單筆）
+            grade_single_use_case.exec(
+                student=student,
+                contents_name=contents_name,
+                reply_token=event.reply_token,
+                message_log_id=message_log_id
+            )
+            return
+
+        if parsed.action == 'apply_manual':
+            # 申請人工評分（先做門檻檢查，合格就出確認卡）
+            grading_port_provider.manual_regrade_request(
+                student=student,
+                contents_name=contents_name,
+                reply_token=event.reply_token
+            )
+            return
+
+        if parsed.action == 'confirm_manual':
+            # 申請人工評分（先做門檻檢查，合格就出確認卡）
+            grading_port_provider.ask_manual_regrade_reason(
+                student=student,
+                contents_name=contents_name,
+                reply_token=event.reply_token,
+                message_log_id=message_log_id
+            )
+            return
 
 # 2) 自己的 dispatcher，把 parser 解析出來的 event 送到對應處理器
+
+
 def _dispatch(event, destination: str):
     if isinstance(event, FollowEvent):
         return on_follow(event, destination)
