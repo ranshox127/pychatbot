@@ -1,6 +1,6 @@
 # infrastructure/mysql_student_repository.py
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 
 import pymysql
 from pymysql.err import IntegrityError
@@ -42,6 +42,20 @@ class MySQLStudentRepository(StudentRepository):
                 cur.execute(sql, (student_id,))
                 row = cur.fetchone()
                 return self._map_row_to_student(row) if row else None
+
+    def get_all_students(self, context_title: str) -> List[Student]:
+        sql = """
+            SELECT ai.*
+            FROM account_info ai
+            WHERE ai.context_title = %s
+              AND ai.roleid = %s
+              AND ai.del = 0
+        """
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (context_title, RoleEnum.STUDENT.value))
+                rows = cur.fetchall()
+                return [self._map_row_to_student(row) for row in rows]
 
     def save(self, student: Student) -> None:
         def _to_roleid(val) -> int:

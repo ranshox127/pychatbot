@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional
+from typing import List, Optional
 
 
 class RoleEnum(Enum):
@@ -60,6 +60,10 @@ class StudentRepository(ABC):
 
     @abstractmethod
     def find_by_student_id(self, student_id: str) -> Optional[Student]:
+        pass
+
+    @abstractmethod
+    def get_all_students(self, context_title: str) -> List[Student]:
         pass
 
     @abstractmethod
