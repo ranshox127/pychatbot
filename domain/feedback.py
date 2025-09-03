@@ -1,0 +1,13 @@
+from typing import List, Optional, Protocol, Dict, Any, Tuple
+
+
+class FeedbackRepository(Protocol):
+    def get_summarysubmissions(self): ...
+
+    def complete_review_summarysubmission(self, submission_id): ...
+
+    def insert_teacher_feedback(
+        self, SubmissionId, SubmissionType, Feedback, FeedbackTime, context_title, LineID): ...
+
+    def insert_summary_feedback_evaluation(
+        self, FeedbackId, Accuracy, Readability, Clarity, Consistency, Answerability): ...
