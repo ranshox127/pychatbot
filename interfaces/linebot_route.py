@@ -121,7 +121,7 @@ def on_postback(
     leave_service: LeaveService = Provide[AppContainer.leave_service],
     chatbot_logger: ChatbotLogger = Provide[AppContainer.chatbot_logger],
     grading_port_provider: GraderClient = Provide[AppContainer.grading_port_provider],
-    get_suggestion_usecase: GetSuggestionUseCase = Provide[AppContainer.get_suggestion_usecase],
+    get_suggestion_use_case: GetSuggestionUseCase = Provide[AppContainer.get_suggestion_use_case],
     grade_single_use_case: GradeSingleUseCase = Provide[AppContainer.grade_single_use_case]
 ):
     """
@@ -180,7 +180,7 @@ def on_postback(
 
         if parsed.action == 'get_grade':
             # 這支等於「查看評分/建議」
-            get_suggestion_usecase.exec(
+            get_suggestion_use_case.exec(
                 student=student,
                 contents_name=contents_name,
                 reply_token=event.reply_token,
