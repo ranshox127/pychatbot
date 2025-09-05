@@ -1,8 +1,58 @@
+# OS
+.DS_Store
+
+# Python bytecode & artifacts
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+
+# Virtual envs
+.venv/
+venv/
+env/
+# （保留 uv.lock；不要忽略 .uv.lock）
+
+# Tests & coverage
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Type checkers & linters
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# Hypothesis tests
+.hypothesis/
+
+# IDE/Editors
 .vscode/
+.idea/
+*.code-workspace
+
+# Flask / runtime
+instance/
+*.log
+*.pid
+
+# Dotenv (keep example tracked)
+.env
+.env.*
+*.env
+!.env.example
+
+# Repo-specific
 nohup.out
 flask_production.log
 quick_check.py
-.env*
+
 schema_*
