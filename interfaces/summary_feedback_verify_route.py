@@ -12,7 +12,6 @@ summary_feedback_verify_bp = Blueprint('summary_feedback_verify', __name__)
 
 
 @summary_feedback_verify_bp.route('/summarysubmissions/')
-@inject
 def summarysubmissions_web():
     """回傳 html 模板. 模板在 /templates"""
     return render_template('SummarySubmission.html')
