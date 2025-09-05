@@ -7,7 +7,7 @@ from linebot.v3.messaging import (
     Message
 )
 
-from base_builder import MessageBuilder
+from application.message_builders.base_builder import MessageBuilder
 
 
 class SummaryMenuBuilder(MessageBuilder):
