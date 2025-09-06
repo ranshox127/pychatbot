@@ -1,0 +1,29 @@
+services:
+  mysql-dev:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports: ["3306:3306"]
+    volumes:
+      # 持久化資料
+      - mysql_data:/var/lib/mysql
+      # # 入口初始化：只放 00-create-dbs.sql 與 20-import-schemas.sh（只會在「資料目錄是空的」時執行）
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      # 只掛 3 個 schema 檔（檔名可自訂，但要與匯入腳本一致）
+      - ./schema_linebot.sql:/schemas/schema_linebot.sql:ro
+      - ./schema_verify.sql:/schemas/schema_verify.sql:ro
+      - ./schema_rs.sql:/schemas/schema_rs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  mysql_data:
+
+# docker compose up -d mysql-dev
+
+
+# 停用：docker compose stop（保留容器與 volume）。
+# 清容器但保留資料（volume）：docker compose down（不加 -v）。

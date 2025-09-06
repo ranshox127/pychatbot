@@ -1,0 +1,32 @@
+services:
+  mysql-test:
+    image: mysql:8.0
+    container_name: mysql-test
+    # platform: linux/arm64/v8   # Apple Silicon 若有需要再開
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"   # 減少與 dev 衝突
+    # ephemeral：資料放記憶體，每次起來都會跑 init
+    tmpfs:
+      - /var/lib/mysql
+    volumes:
+      # 入口初始化：只放 00-create-dbs.sql 與 20-import-schemas.sh
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      # 只掛 3 個 schema 檔到 /schemas（避免覆蓋 entrypoint 目錄）
+      - ./schema_linebot.sql:/schemas/schema_linebot.sql:ro
+      - ./schema_verify.sql:/schemas/schema_verify.sql:ro
+      - ./schema_rs.sql:/schemas/schema_rs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+
+# 本機一次性測試（乾淨 DB on 3307）
+# docker compose -f compose.test.yml up -d mysql-test
+# 等健康檢查通過後跑測試（注意把 .env.test 的 PORT 指到 3307）
+# export CHATBOT_DB_PORT=3307
+# pytest -q -m integration
+# docker compose -f compose.test.yml down  # 這個 down 不需加 -v，tmpfs 自然會丟掉
