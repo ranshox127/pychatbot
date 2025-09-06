@@ -43,7 +43,7 @@ class MySQLSuggestionQueryRepository(SuggestionQueryRepository):
             with conn.cursor(pymysql.cursors.DictCursor) as cur:
                 query = '''
                     SELECT keyword, question
-                    FROM cocept_keyword_and_question
+                    FROM concept_keyword_and_question
                     WHERE context_title = %s
                     AND contents_name = %s
                     AND `del` = 0
