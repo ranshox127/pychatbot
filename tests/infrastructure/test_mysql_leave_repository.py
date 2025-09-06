@@ -1,3 +1,7 @@
+"""
+記得測試前先塞對應的 account_info
+FOREIGN KEY (`student_ID`,`context_title`)
+"""
 # uv run -m pytest tests/infrastructure/test_mysql_leave_repository.py
 from datetime import datetime
 import pytest
