@@ -40,8 +40,9 @@ pytest_plugins = [
     "tests.fixtures.postgresql_fixtures",
     "tests.fixtures.db_tx",
     "tests.fixtures.db_truncate",
-    "tests.fixtures.seed",
+    "tests.fixtures.seeder",
     "tests.fixtures.seed_commit",
     "tests.fixtures.spies",
     "tests.fixtures.live_server",
+    "tests.fixtures.infra_seed"
 ]
