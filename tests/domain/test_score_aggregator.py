@@ -141,10 +141,12 @@ def test_score_aggregator_should_return_score_report(student, course, aggregator
     report = aggregator.aggregate(student, course, "C1", "fake_url")
     assert report == ScoreReport(
         contents_name="C1",
-        oj_exercise_score="9 / 10",
-        oj_advance_score="3 / 5",
-        summary_score="100",
-        mistake_review_score="100"
+        scores={
+        'OJ Exercise(完成題數)': "9 / 10",
+        'OJ Advance(完成題數)':"3 / 5",
+        '總結概念成績': "100",
+        '錯誤回顧成績':"100"
+        }
     )
 
 
