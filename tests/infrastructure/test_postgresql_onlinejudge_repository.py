@@ -14,6 +14,7 @@ import pytest
 
 from infrastructure.postgresql_onlinejudge_repository import PostgreSQLOnlinejudgeRepository
 
+pytestmark = pytest.mark.infrastructure
 
 @pytest.fixture
 def repo():
@@ -23,15 +24,18 @@ def repo():
                   'ssh_username': 'dummy', 'ssh_password': 'dummy'}
     return PostgreSQLOnlinejudgeRepository(db_config, ssh_config)
 
-
-@patch('infrastructure.postgresql_onlinejudge_repository.PostgreSQLOnlinejudgeRepository._get_connection')
-def test_get_exercise_number_by_contents_name(mock_get_connection, repo):
-    # 準備 mock 資源
+@pytest.fixture
+def mock_postgresql_connection():
     mock_tunnel = MagicMock()
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
     mock_cursor.fetchone.return_value = (15,)
     mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    return mock_tunnel, mock_conn, mock_cursor
+
+@patch('infrastructure.postgresql_onlinejudge_repository.PostgreSQLOnlinejudgeRepository._get_connection')
+def test_get_exercise_number_by_contents_name(mock_get_connection, mock_postgresql_connection, repo):
+    mock_tunnel, mock_conn, mock_cursor = mock_postgresql_connection
     mock_get_connection.return_value = (mock_tunnel, mock_conn)
 
     result = repo.get_exercise_number_by_contents_name("MyContest", "Chapter1")
@@ -43,19 +47,15 @@ def test_get_exercise_number_by_contents_name(mock_get_connection, repo):
 
 
 @patch('infrastructure.postgresql_onlinejudge_repository.PostgreSQLOnlinejudgeRepository._get_connection')
-def test_get_advance_submission_by_contents_name_found(mock_get_connection, repo):
-    mock_tunnel = MagicMock()
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.fetchone.return_value = (5,)
-    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+def test_get_advance_submission_by_contents_name_found(mock_get_connection, mock_postgresql_connection, repo):
+    mock_tunnel, mock_conn, mock_cursor = mock_postgresql_connection
     mock_get_connection.return_value = (mock_tunnel, mock_conn)
 
     result = repo.get_advance_submission_by_contents_name(
         "MyContest", "Chapter2", "b12345678", "2025-08-03 23:59:59"
     )
 
-    assert result == 5
+    assert result == 15
     _, params = mock_cursor.execute.call_args[0]
     assert params[0] == "Chapter2_A%"
     assert params[1] == "2025-08-03 23:59:59"

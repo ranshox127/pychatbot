@@ -14,27 +14,33 @@ import pytest
 from domain.moodle_enrollment import MoodleEnrollment
 from infrastructure.postgresql_moodle_repository import PostgreSQLMoodleRepository
 
+pytestmark = pytest.mark.infrastructure
+
+
 @pytest.fixture
-def mock_conn_mgr():
-    """提供一個被 mock 的 connection manager"""
-    # 建立一個假的 cursor
+def repo():
+    db_config = {'host': 'dummy', 'port': 5432, 'user': 'dummy',
+                 'password': 'dummy', 'database': 'dummy'}
+    ssh_config = {'ssh_host': 'dummy',
+                  'ssh_username': 'dummy', 'ssh_password': 'dummy'}
+    return PostgreSQLMoodleRepository(db_config, ssh_config)
+
+
+@pytest.fixture
+def mock_postgresql_connection():
     mock_cursor = MagicMock()
-    
-    # 建立一個假的 connection manager
     mock_manager = MagicMock()
-    # 讓 manager 的 get_cursor() context manager 回傳假的 cursor
     mock_manager.get_cursor.return_value.__enter__.return_value = mock_cursor
-    
-    # 回傳 manager 和 cursor，方便在測試中使用
     return mock_manager, mock_cursor
 
+
 @patch('infrastructure.postgresql_moodle_repository.LazyMoodleConnectionManager')
-def test_find_student_enrollments(MockLazyManager, mock_conn_mgr):
+def test_find_student_enrollments(MockLazyManager, mock_postgresql_connection, repo):
     """
     測試 find_student_enrollments 方法
     """
     # 1. 準備 (Arrange)
-    mock_manager, mock_cursor = mock_conn_mgr
+    mock_manager, mock_cursor = mock_postgresql_connection
     # 讓 patch 過的 LazyMoodleConnectionManager 在建立時回傳我們的 mock_manager
     MockLazyManager.return_value = mock_manager
 
@@ -54,7 +60,7 @@ def test_find_student_enrollments(MockLazyManager, mock_conn_mgr):
     # 3. 驗證 (Assert)
     # 驗證 conn_mgr 的 get_cursor 是否被呼叫
     mock_manager.get_cursor.assert_called_once()
-    
+
     # 驗證 SQL 和參數是否正確
     expected_sql = """
             SELECT
@@ -68,7 +74,8 @@ def test_find_student_enrollments(MockLazyManager, mock_conn_mgr):
             JOIN mdl_course AS cour ON cour.id = context.instanceid
             WHERE (usr.username = %s OR usr.username LIKE %s);
             """
-    mock_cursor.execute.assert_called_once_with(expected_sql, ('student123', 'student123@%'))
+    mock_cursor.execute.assert_called_once_with(
+        expected_sql, ('student123', 'student123@%'))
 
     # 驗證回傳的物件列表是否正確
     assert len(enrollments) == 2
