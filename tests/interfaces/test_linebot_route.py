@@ -6,15 +6,59 @@ import hashlib
 import base64
 from unittest.mock import MagicMock, ANY
 
-
-def generate_line_signature(channel_secret: str, request_body: str) -> str:
-    """為給定的 request body 產生有效的 LINE Webhook 簽章。"""
-    hash_obj = hmac.new(channel_secret.encode('utf-8'),
-                        request_body.encode('utf-8'), hashlib.sha256).digest()
-    return base64.b64encode(hash_obj).decode('utf-8')
+import pytest
+from tests.helpers import line_signature, post_line_event, ev_postback
 
 
-def test_postback_event_for_apply_leave(client, container, app):
+@pytest.fixture
+def mock_services(container):
+    """ 用於設定 mock 服務 """
+    # Mock 需要的服務
+    mock_leave_service = MagicMock()
+    fake_student = SimpleNamespace(
+        student_id="S12345678",
+        line_user_id="U_TEST_USER_ID",
+        context_title="idle"
+    )
+
+    mock_student_repo = MagicMock()
+    mock_student_repo.find_by_line_id.return_value = fake_student
+
+    mock_logger = MagicMock()
+    mock_logger.log_message.return_value = 123
+
+    # 使用 container 的覆蓋來 mock 服務
+    container.leave_service.override(mock_leave_service)
+    container.student_repo.override(mock_student_repo)
+    container.chatbot_logger.override(mock_logger)
+
+    return mock_leave_service, mock_student_repo, mock_logger
+
+
+def test_postback_event_for_apply_leave2(client, container, app, mock_services):
+    mock_leave_service, mock_student_repo, mock_logger = mock_services
+
+    # Arrange：創建測試的 payload，並使用 helpers.py 的 post_line_event 來發送。
+    fake_line_payload = ev_postback(data="apply_leave")
+
+    # 使用 helpers.py 的 post_line_event 發送 Webhook
+    response, _ = post_line_event(client, app, fake_line_payload)
+
+    # Assert：
+    assert response.status_code == 200
+    assert response.data == b'OK'
+
+    # 驗證 student repo 被呼叫
+    mock_student_repo.find_by_line_id.assert_called_once_with('U_TEST_USER_ID')
+
+    # 驗證 mock service 被正確呼叫
+    mock_leave_service.apply_for_leave.assert_called_once_with(
+        student=ANY,
+        reply_token='test_reply_token_123'
+    )
+
+
+def test_postback_event_for_apply_leave(client, container, app, mock_services):
     # Arrange：以 mock 替代真實 leave_service
     # 現在 `container` 是正確的 container 實例了
     mock_leave_service = MagicMock()
@@ -38,22 +82,7 @@ def test_postback_event_for_apply_leave(client, container, app):
 
         fake_line_payload = {
             "destination": "Uxxxxxxxxxxxxxx",  # 頂層需要一個 destination 欄位
-            "events": [
-                {
-                    "type": "postback",
-                    "replyToken": "test_reply_token_123",
-                    "source": {"userId": "U_TEST_USER_ID", "type": "user"},
-                    "timestamp": 1609459200000,
-                    # --- 補上 Pydantic 要求的必填欄位 ---
-                    "mode": "active",
-                    "webhookEventId": "01GXXXXXXXXXXXXXXXXX",  # 隨機的假 ID
-                    "deliveryContext": {"isRedelivery": False},
-                    # ------------------------------------
-                    "postback": {
-                        "data": "apply_leave"
-                    }
-                }
-            ]
+            "events": [ev_postback(user_id="U_X", data="apply_leave")]
         }
 
         # 【修正】: 產生有效的 body 和 signature
@@ -61,7 +90,7 @@ def test_postback_event_for_apply_leave(client, container, app):
 
         # 【確認】確保這裡使用的 secret 來源是 app.config，
         # 它現在會穩定地提供 "this_is_a_fixed_test_secret"
-        signature = generate_line_signature(
+        signature = line_signature(
             app.config['LINE_CHANNEL_SECRET'], body_str
         )
 
