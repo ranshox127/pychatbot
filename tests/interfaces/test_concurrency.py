@@ -28,7 +28,7 @@ def _post_json(url, secret, payload):
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
 def test_true_concurrency_register_same_student_id(
-    live_server, app, container, seed_course_commit, line_api_service_spy
+    live_server, app, container, it_seed_course, line_api_service_spy
 ):
     """
     兩位使用者（U_A, U_B）同時用同一個學號註冊。
@@ -40,7 +40,7 @@ def test_true_concurrency_register_same_student_id(
     app.config["LINE_EXECUTOR_WORKERS"] = 1
 
     course_title = "1234_程式設計-Python_黃鈺晴教師"
-    seed_course_commit(context_title=course_title)
+    it_seed_course(context_title=course_title)
 
     student_id = "112522065"
     fullname = "雙人衝突測試"
@@ -131,12 +131,12 @@ def test_true_concurrency_register_same_student_id(
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_batch_events_in_one_request(live_server, app, container, seed_student_commit, chatbot_logger_spy, line_api_service_spy):
+def test_batch_events_in_one_request(live_server, app, container, it_seed_student, chatbot_logger_spy, line_api_service_spy):
     """
     單一 HTTP 請求 body 內含多個 events，驗證迴圈確實處理每筆事件。
     """
     # 準備已註冊學生（讓 message/postback 能走到服務）
-    seed_student_commit(
+    it_seed_student(
         user_id="U_X",
         student_id="S0001",
         name="批次使用者",
