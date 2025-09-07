@@ -83,10 +83,10 @@ def seed_change_deadline(conn, *, context_title, contents_name, oj_d1=6, summary
         )
 
 
-def seed_summary_log(conn, *,
-                     student_ID, context_title, contents_name,
-                     result=1, penalty=0, operation_time="2025-08-01 10:00:00",
-                     ):
+def seed_summary_grading_log(conn, *,
+                             student_ID, context_title, contents_name,
+                             result=1, penalty=0, operation_time="2025-08-01 10:00:00",
+                             ):
     # linebot DB: summary_gradding_log
     with conn.cursor() as cur:
         cur.execute(
@@ -123,11 +123,25 @@ def seed_review_publish(conn, *,
         )
 
 
-def seed_summary_submission(conn, *, summary_gradding_log_id, verify_status="wait_review"):
+def seed_summary_submission(conn, *, summary_gradding_log_id, student_id=None, topic_id=None, gpt_feedback=None,
+                            submit_time=None, verify_status="wait_review", context_title=None, student_summary=None,
+                            basic_feedback=None, line_id=None):
+    # 設置當前時間為預設提交時間，如果未提供 submit_time
+    submit_time = submit_time or datetime.now()
+
+    # 若沒有提供其他欄位的值，則設定為 None（或可以根據需要設定其他預設值）
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO SummarySubmissions (summary_gradding_log_id, verify_status) VALUES (%s,%s)",
-            (summary_gradding_log_id, verify_status),
+            """
+            INSERT INTO SummarySubmissions (
+                summary_gradding_log_id, StudentId, TopicId, GPT_Feedback, SubmitTime, verify_status, context_title,
+                student_summary, basic_feedback, LineID
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                summary_gradding_log_id, student_id, topic_id, gpt_feedback, submit_time, verify_status, context_title,
+                student_summary, basic_feedback, line_id
+            )
         )
 
 
@@ -228,3 +242,24 @@ def seed_units(
             "summary_d1": u.get("summary_d1", default_summary_d1),
         })
     return {"context_title": context_title, "units": normalized}
+
+
+def seed_leave(conn, *, operation_time, student_ID, student_name, apply_time, reason, context_title):
+    # 確保相關學生資料存在，這裡依賴已經實作好的 `seed_student`
+    seed_student(conn, student_id=student_ID, context_title=context_title)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ask_for_leave (operation_time, student_ID, student_name, apply_time, reason, context_title)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                reason=VALUES(reason)
+            """,
+            (operation_time, student_ID, student_name,
+             apply_time, reason, context_title)
+        )
+    conn.commit()
+    return {
+        "student_ID": student_ID, "apply_time": apply_time, "context_title": context_title
+    }
