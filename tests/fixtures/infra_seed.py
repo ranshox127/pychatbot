@@ -53,6 +53,7 @@ def it_seed_course(_bind, linebot_mysql_truncate):
     return _bind(_seed_course, linebot_mysql_truncate)
 
 
+@pytest.fixture
 def it_seed_student(_bind, linebot_mysql_truncate):
     return _bind(_seed_student, linebot_mysql_truncate)
 
