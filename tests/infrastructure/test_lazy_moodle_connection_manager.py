@@ -1,7 +1,7 @@
 # uv run -m pytest tests/infrastructure/test_lazy_moodle_connection_manager.py
-import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import psycopg2
 import pytest
 
 from infrastructure.postgresql_moodle_repository import LazyMoodleConnectionManager
@@ -107,5 +107,38 @@ class TestLazyMoodleConnectionManager:
                 pass
 
         # 驗證即使發生錯誤，內部狀態依然是乾淨的
+        assert manager_instance._conn is None
+        assert manager_instance._tunnel is None
+
+    def test_get_cursor_after_manual_close(self, MockTimer, MockSSHTunnel, MockPsycopg2, manager_instance):
+        """測試手動關閉後，再次呼叫 get_cursor 是否能重新建立連線"""
+        with manager_instance.get_cursor():
+            pass
+
+        # 先手動關閉連線
+        manager_instance.close()
+
+        # 再次嘗試呼叫 get_cursor
+        with manager_instance.get_cursor():
+            pass  # 應該重新建立連線
+
+        MockSSHTunnel.return_value.start.assert_called_with()
+        MockPsycopg2.connect.assert_any_call(
+            host='127.0.0.1',
+            port=MockSSHTunnel.return_value.local_bind_port,  # 使用 mock 生成的端口
+            database='dummy_db',
+            user='dummy_user',
+            password='dummy_password'
+        )
+
+    def test_connection_failure_handling_2(self, MockTimer, MockSSHTunnel, MockPsycopg2, manager_instance):
+        """測試 psycopg2.connect() 失敗時，連線會被正確處理"""
+        MockPsycopg2.connect.side_effect = psycopg2.OperationalError(
+            "Database connection failed")
+
+        with pytest.raises(psycopg2.OperationalError, match="Database connection failed"):
+            with manager_instance.get_cursor():
+                pass
+
         assert manager_instance._conn is None
         assert manager_instance._tunnel is None
