@@ -7,8 +7,8 @@ pytestmark = pytest.mark.infrastructure
 
 
 @pytest.fixture
-def repo(container):
-    return MySQLStudentRepository(container.config.LINEBOT_DB_CONFIG())
+def repo(test_config):
+    return MySQLStudentRepository(test_config.LINEBOT_DB_CONFIG)
 
 
 @pytest.fixture(autouse=True)
