@@ -4,9 +4,9 @@ from tests.helpers import make_base_envelope, ev_follow, post_line_event
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_follow_unregistered_triggers_register_prompt(client, app, container, seed_course_commit):
+def test_follow_unregistered_triggers_register_prompt(client, app, container, it_seed_course):
 
-    seed_course_commit(context_title="1122_程式設計-Python_黃鈺晴教師")
+    it_seed_course(context_title="1122_程式設計-Python_黃鈺晴教師")
 
     payload = make_base_envelope(ev_follow(user_id="lineid"))
     service = container.line_api_service()
@@ -26,9 +26,9 @@ def test_follow_unregistered_triggers_register_prompt(client, app, container, se
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_follow_registered_links_richmenu(client, app, container, seed_student_commit):
+def test_follow_registered_links_richmenu(client, app, container, it_seed_student):
     # Arrange：建立「已註冊」學生
-    seed_student_commit(
+    it_seed_student(
         student_id="S12345678",
         user_id="U_TEST_USER_ID",
         name="旅歐文",

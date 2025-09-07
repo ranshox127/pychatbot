@@ -32,7 +32,7 @@ def fetch_leave(linebot_mysql_truncate):
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_register_success(client, app, container, seed_course_commit):
+def test_register_success(client, app, container, it_seed_course):
     """
     Scenario: 成功註冊與綁定課程
     Given 我是尚未註冊的新學生
@@ -46,7 +46,7 @@ def test_register_success(client, app, container, seed_course_commit):
 
     # 這門課要與 FakeMoodleRepo 回傳的 course_fullname 完全一致
     course_title = "1234_程式設計-Python_黃鈺晴教師"
-    seed_course_commit(context_title=course_title)
+    it_seed_course(context_title=course_title)
 
     # 準備假 Moodle + 假 Line service
     student_id = "112522065"
@@ -81,16 +81,16 @@ def test_register_success(client, app, container, seed_course_commit):
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_register_duplicate_student_id(client, app, container, seed_student_commit, seed_course_commit, line_api_service_spy):
+def test_register_duplicate_student_id(client, app, container, it_seed_student, it_seed_course, line_api_service_spy):
     """
     學號已被綁：student_repo.find_by_student_id 有人 → 應回覆「已被使用」
     """
     # Arrange: 先種一門與 Moodle stub 對得上的課
     course_title = "1234_程式設計-Python_黃鈺晴教師"
-    seed_course_commit(context_title=course_title)
+    it_seed_course(context_title=course_title)
 
     # 已有綁定的學生
-    existing = seed_student_commit(
+    existing = it_seed_student(
         user_id="U_already_bound",
         student_id="112522065",
         name="已綁學生",
@@ -125,13 +125,13 @@ def test_register_duplicate_student_id(client, app, container, seed_student_comm
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_register_moodle_not_found(client, app, container, seed_course_commit, line_api_service_spy, chatbot_logger_spy):
+def test_register_moodle_not_found(client, app, container, it_seed_course, line_api_service_spy, chatbot_logger_spy):
     """
     Moodle 查無此人：find_student_info=None → 正確提示，不寫 DB
     """
     # Arrange
     course_title = "5678_資料結構_王老師"
-    seed_course_commit(context_title=course_title)
+    it_seed_course(context_title=course_title)
 
     line_user_id = "U_not_found"
 
@@ -168,13 +168,13 @@ def test_register_moodle_not_found(client, app, container, seed_course_commit, l
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_register_with_emoji_name_ok(client, app, container, seed_course_commit):
+def test_register_with_emoji_name_ok(client, app, container, it_seed_course):
     """
     姓名/課名包含 emoji/中英混雜：確保寫入不炸（回測一個包含 emoji 的名子）
     """
     # Arrange
     course_title = "2468_演算法🧩與實作_李老師"
-    seed_course_commit(context_title=course_title)
+    it_seed_course(context_title=course_title)
 
     line_user_id = "U_emoji"
     student_id = "101010101"
@@ -209,15 +209,15 @@ def test_register_with_emoji_name_ok(client, app, container, seed_course_commit)
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_follow_again_already_registered_only_switch_menu(client, app, container, seed_student_commit, seed_course_commit, line_api_service_spy, chatbot_logger_spy):
+def test_follow_again_already_registered_only_switch_menu(client, app, container, it_seed_student, it_seed_course, line_api_service_spy, chatbot_logger_spy):
     """
     後續 follow（已註冊）：再次 follow → 只切 RichMenu 不重註冊。
     """
     # Arrange: pre-registered student
     course_title = "1357_AI程式設計_張老師"
-    seed_course_commit(context_title=course_title)
+    it_seed_course(context_title=course_title)
 
-    student = seed_student_commit(
+    student = it_seed_student(
         user_id="U_registered",          # 與 duplicate 測試一致，使用 user_id 參數名
         student_id="114514000",
         name="小智",
@@ -239,7 +239,7 @@ def test_follow_again_already_registered_only_switch_menu(client, app, container
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_leave_full_flow(client, app, container, seed_student_commit, mail_spy, leave_repo_spy, fetch_leave):
+def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leave_repo_spy, fetch_leave):
     """
     Scenario: 成功完成請假申請
     Given 我已經註冊並登入系統
@@ -253,7 +253,7 @@ def test_leave_full_flow(client, app, container, seed_student_commit, mail_spy, 
     期望: 資料庫 MySQLLeaveRepository 有對應的請假紀錄
     """
     context_title = "1234_程式設計-Python_黃鈺晴教師"
-    stu = seed_student_commit(
+    stu = it_seed_student(
         context_title=context_title, user_id="U_TEST_USER_ID")
     line_user_id = stu["user_id"]
     student_id = stu["student_id"]
@@ -310,9 +310,9 @@ def test_leave_full_flow(client, app, container, seed_student_commit, mail_spy, 
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_leave_apply_cancel(client, app, container, seed_student_commit, mail_spy, leave_repo_spy, fetch_leave):
+def test_leave_apply_cancel(client, app, container, it_seed_student, mail_spy, leave_repo_spy, fetch_leave):
     context_title = "1234_程式設計-Python_黃鈺晴教師"
-    stu = seed_student_commit(
+    stu = it_seed_student(
         context_title=context_title, user_id="U_TEST_USER_ID")
     line_user_id = stu["user_id"]
     student_id = stu["student_id"]
@@ -349,7 +349,7 @@ def test_leave_apply_cancel(client, app, container, seed_student_commit, mail_sp
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
 def test_check_score_flow(client, app,
-                          seed_student_commit, seed_units_commit,
+                          it_seed_student, seed_units_commit,
                           line_api_service_spy, score_aggregator_stub, chatbot_logger_spy,
                           monkeypatch):
     """
@@ -365,7 +365,7 @@ def test_check_score_flow(client, app,
     And 系統應該記錄我的查詢事件
     """
 
-    seed_student_commit(context_title="1234_程式設計-Python_黃鈺晴教師")
+    it_seed_student(context_title="1234_程式設計-Python_黃鈺晴教師")
 
     seed_units_commit(
         context_title="1234_程式設計-Python_黃鈺晴教師",
@@ -434,10 +434,10 @@ def test_check_score_flow(client, app,
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
 def test_check_score_with_no_published_unit(client, app, container,
-                                            seed_student_commit, seed_units_commit,
+                                            it_seed_student, seed_units_commit,
                                             line_api_service_spy, score_aggregator_stub, chatbot_logger_spy,
                                             monkeypatch):
-    seed_student_commit(context_title="1234_程式設計-Python_黃鈺晴教師")
+    it_seed_student(context_title="1234_程式設計-Python_黃鈺晴教師")
 
     seed_units_commit(
         context_title="1234_程式設計-Python_黃鈺晴教師",
@@ -480,11 +480,11 @@ def test_check_score_with_no_published_unit(client, app, container,
 @pytest.mark.parametrize("invalid_unit", ["C9", "c2"])
 def test_check_score_with_nonexistent_unit(
     client, app, container,
-    seed_student_commit, seed_units_commit,
+    it_seed_student, seed_units_commit,
     line_api_service_spy, score_aggregator_stub, chatbot_logger_spy,
     monkeypatch, invalid_unit
 ):
-    seed_student_commit(context_title="1234_程式設計-Python_黃鈺晴教師")
+    it_seed_student(context_title="1234_程式設計-Python_黃鈺晴教師")
 
     seed_units_commit(
         context_title="1234_程式設計-Python_黃鈺晴教師",
@@ -550,7 +550,7 @@ def test_check_score_with_nonexistent_unit(
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_ask_TA_flow(client, app, container, seed_student_commit, line_api_service_spy, chatbot_logger_spy):
+def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_spy, chatbot_logger_spy):
     """
     Scenario: 成功完成提問
     Given 我已經註冊並登入系統
@@ -559,7 +559,7 @@ def test_ask_TA_flow(client, app, container, seed_student_commit, line_api_servi
     And 我留下問題
     Then 系統應該記錄我的提問操作
     """
-    seed_student_commit(context_title="1234_程式設計-Python_黃鈺晴教師")
+    it_seed_student(context_title="1234_程式設計-Python_黃鈺晴教師")
 
     line_user_id = "U_TEST_USER_ID"
     question_text = "退選"
@@ -604,11 +604,11 @@ def test_ask_TA_flow(client, app, container, seed_student_commit, line_api_servi
     ), {"messages": chatbot_logger_spy.messages, "events": chatbot_logger_spy.events}
 
 
-def test_leave_interrupt_then_check_score(client, app, container, seed_student_commit, seed_units_commit):
+def test_leave_interrupt_then_check_score(client, app, container, it_seed_student, seed_units_commit):
     """
     在任何一個多步驟的流程中，如果進行了其他操作，應以新操作爲準．
     """
-    seed_student_commit(context_title="1234_程式設計-Python_黃鈺晴教師")
+    it_seed_student(context_title="1234_程式設計-Python_黃鈺晴教師")
 
     seed_units_commit(
         context_title="1234_程式設計-Python_黃鈺晴教師",

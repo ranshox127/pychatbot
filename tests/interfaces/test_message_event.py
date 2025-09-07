@@ -7,10 +7,10 @@ from tests.helpers import make_base_envelope, ev_message_text, post_line_event
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_register_flow(client, app, container, seed_course_commit):
+def test_message_register_flow(client, app, container, it_seed_course):
     # 未註冊（收到訊息 -> 當作註冊學號）
 
-    seed_course_commit(context_title="1122_程式設計-Python_黃鈺晴教師")
+    it_seed_course(context_title="1122_程式設計-Python_黃鈺晴教師")
 
     # 建立 mocks
     mock_registration = MagicMock()
