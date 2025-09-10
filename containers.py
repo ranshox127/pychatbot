@@ -1,41 +1,46 @@
-from dependency_injector import containers, providers
 from unittest.mock import MagicMock
-from linebot.v3.messaging import (
-    Configuration as LineMessagingConfig,
-    ApiClient,
-    MessagingApi,
-)
 
-from application.GenAI_feedback_service import GenAIFeedbackService, OpenAIClient
+from dependency_injector import containers, providers
+from linebot.v3.messaging import ApiClient
+from linebot.v3.messaging import Configuration as LineMessagingConfig
+from linebot.v3.messaging import MessagingApi
+
+from application.ask_TA_service import AskTAService
+from application.chatbot_logger import ChatbotLogger
+from application.check_attendance_service import CheckAttendanceService
+from application.check_score_service import CheckScoreService
+from application.GenAI_feedback_service import (GenAIFeedbackService,
+                                                OpenAIClient)
 from application.grader_client import GraderClient
+from application.leave_service import LeaveService
+from application.mail_carrier import GmailSMTPMailCarrier
+from application.registration_service import RegistrationService
 from application.suggestion_service import SuggestionService
 from application.summary_usecases.get_suggestion import GetSuggestionUseCase
 from application.summary_usecases.grade_batch import GradeBatchUseCase
 from application.summary_usecases.grade_single import GradeSingleUseCase
-from infrastructure.mysql_feedback_push_repository import MySQLFeedbackPushRepository
-from infrastructure.mysql_feedback_repository import MySQLFeedbackRepository
-from infrastructure.mysql_grading_log_repository import MySQLGradingLogRepository
-from infrastructure.mysql_student_repository import MySQLStudentRepository
-from infrastructure.mysql_course_repository import MySQLCourseRepository
-from infrastructure.mysql_suggestion_query_repository import MySQLSuggestionQueryRepository
-from infrastructure.postgresql_moodle_repository import PostgreSQLMoodleRepository
-from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
-from infrastructure.mysql_message_log_repository import MySQLMessageLogRepository
-from infrastructure.mysql_leave_repository import MySQLLeaveRepository
-from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
-from infrastructure.postgresql_onlinejudge_repository import PostgreSQLOnlinejudgeRepository
-from infrastructure.mysql_summary_repository import MySQLSummaryRepository
-
-from infrastructure.gateways.line_api_service import LineApiService
-from domain.score import ScoreAggregator
-from application.registration_service import RegistrationService
 from application.user_state_accessor import UserStateAccessor
-from application.ask_TA_service import AskTAService
-from application.check_attendance_service import CheckAttendanceService
-from application.check_score_service import CheckScoreService
-from application.leave_service import LeaveService
-from application.chatbot_logger import ChatbotLogger
-from application.mail_carrier import GmailSMTPMailCarrier
+from domain.score import ScoreAggregator
+from infrastructure.gateways.line_api_service import LineApiService
+from infrastructure.mysql_course_repository import MySQLCourseRepository
+from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
+from infrastructure.mysql_feedback_push_repository import \
+    MySQLFeedbackPushRepository
+from infrastructure.mysql_feedback_repository import MySQLFeedbackRepository
+from infrastructure.mysql_grading_log_repository import \
+    MySQLGradingLogRepository
+from infrastructure.mysql_leave_repository import MySQLLeaveRepository
+from infrastructure.mysql_message_log_repository import \
+    MySQLMessageLogRepository
+from infrastructure.mysql_student_repository import MySQLStudentRepository
+from infrastructure.mysql_suggestion_query_repository import \
+    MySQLSuggestionQueryRepository
+from infrastructure.mysql_summary_repository import MySQLSummaryRepository
+from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
+from infrastructure.postgresql_moodle_repository import \
+    PostgreSQLMoodleRepository
+from infrastructure.postgresql_onlinejudge_repository import \
+    PostgreSQLOnlinejudgeRepository
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -207,7 +212,7 @@ class AppContainer(containers.DeclarativeContainer):
     
     openai_client = providers.Factory(
         OpenAIClient,
-        client=config.SUMMARY_OPENAI_KEY
+        api_key=config.SUMMARY_OPENAI_KEY
     )
     
     feedbacker = providers.Factory(
