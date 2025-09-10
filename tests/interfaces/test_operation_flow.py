@@ -6,7 +6,7 @@ from application.check_score_service import CheckScoreService
 from domain.event_log import EventEnum
 from domain.user_state import UserStateEnum
 from tests.helpers import (ev_follow, ev_message_text, ev_postback,
-                           make_base_envelope, post_line_event, wait_for)
+                           make_base_envelope, client_post_event, wait_for)
 from tests.fixtures.fakes import FakeMoodleRepo
 
 
@@ -57,13 +57,13 @@ def test_register_success(client, app, container, it_seed_course):
     with container.moodle_repo.override(fake_moodle):
         # 1) 使用者加入好友
         payload = make_base_envelope(ev_follow(user_id="test_id"))
-        resp, _ = post_line_event(client, app, payload)
+        resp, _ = client_post_event(client, app, payload)
         assert resp.status_code == 200
 
         # 2) 使用者輸入學號 → 觸發註冊流程
         payload = make_base_envelope(ev_message_text(
             text=student_id, user_id="test_id"))
-        resp, _ = post_line_event(client, app, payload)
+        resp, _ = client_post_event(client, app, payload)
         assert resp.status_code == 200
 
         # 驗證資料庫真的寫入
@@ -108,12 +108,12 @@ def test_register_duplicate_student_id(client, app, container, it_seed_student, 
     new_user_line_id = "U_new_user"
     with container.moodle_repo.override(fake_moodle):
         payload = make_base_envelope(ev_follow(new_user_line_id))
-        resp, _ = post_line_event(client, app, payload)
+        resp, _ = client_post_event(client, app, payload)
         assert resp.status_code == 200
 
         payload = make_base_envelope(ev_message_text(
             existing["student_id"], user_id=new_user_line_id))
-        resp, _ = post_line_event(client, app, payload)
+        resp, _ = client_post_event(client, app, payload)
         assert resp.status_code == 200
 
     # Assert: 回覆含「已被使用」；且不會把新 user_id 寫進 DB
@@ -145,11 +145,11 @@ def test_register_moodle_not_found(client, app, container, it_seed_course, line_
     with container.moodle_repo.override(fake_moodle):
 
         # Act: follow then input unknown id
-        resp, _ = post_line_event(
+        resp, _ = client_post_event(
             client, app, make_base_envelope(ev_follow(line_user_id)))
         assert resp.status_code == 200
 
-        resp, _ = post_line_event(
+        resp, _ = client_post_event(
             client, app,
             make_base_envelope(ev_message_text(
                 "999999999", user_id=line_user_id))
@@ -189,11 +189,11 @@ def test_register_with_emoji_name_ok(client, app, container, it_seed_course):
     with container.moodle_repo.override(fake_moodle):
 
         # Act
-        resp, _ = post_line_event(
+        resp, _ = client_post_event(
             client, app, make_base_envelope(ev_follow(line_user_id)))
         assert resp.status_code == 200
 
-        resp, _ = post_line_event(
+        resp, _ = client_post_event(
             client, app,
             make_base_envelope(ev_message_text(
                 student_id, user_id=line_user_id))
@@ -225,7 +225,7 @@ def test_follow_again_already_registered_only_switch_menu(client, app, container
     )
 
     # Act: the same user follows again
-    resp, _ = post_line_event(client, app, make_base_envelope(ev_follow(
+    resp, _ = client_post_event(client, app, make_base_envelope(ev_follow(
         student["line_user_id"] if "line_user_id" in student else student["user_id"])))
     assert resp.status_code == 200
 
@@ -262,14 +262,14 @@ def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leav
     user_state = container.user_state_accessor()
 
     # Act：1) 點【請假】
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback("apply_leave", user_id=line_user_id))
     )
     assert resp.status_code == 200
 
     # 2) 確認請假 → 進入 AWAITING_LEAVE_REASON
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback(
             "[Action]confirm_to_leave", user_id=line_user_id))
@@ -281,7 +281,7 @@ def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leav
     ), f"state={user_state.get_state(line_user_id)}"
 
     # 3) 輸入理由 → 回到 IDLE，寫入 DB，並（若課程開啟）寄信
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_message_text(
             text=reason_text, user_id=line_user_id))
@@ -320,14 +320,14 @@ def test_leave_apply_cancel(client, app, container, it_seed_student, mail_spy, l
     user_state = container.user_state_accessor()
 
     # Act：1) 點【請假】
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback("apply_leave", user_id=line_user_id))
     )
     assert resp.status_code == 200
 
     # 2) 取消請假 → 進入 IDLE
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback(
             "[Action]cancel_to_leave", user_id=line_user_id))
@@ -400,14 +400,14 @@ def test_check_score_flow(client, app,
     line_user_id = "U_TEST_USER_ID"
     unit_name = "C2"
 
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback(
             "check_homework", user_id=line_user_id))
     )
     assert resp.status_code == 200
 
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_message_text(
             text=unit_name, user_id=line_user_id))
@@ -454,7 +454,7 @@ def test_check_score_with_no_published_unit(client, app, container,
     line_user_id = "U_TEST_USER_ID"
 
     # 使用者點「作業繳交查詢」
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback("check_homework", user_id=line_user_id))
     )
@@ -521,7 +521,7 @@ def test_check_score_with_nonexistent_unit(
     line_user_id = "U_TEST_USER_ID"
 
     # Step 1: 點「作業繳交查詢」
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback("check_homework", user_id=line_user_id))
     )
@@ -534,7 +534,7 @@ def test_check_score_with_nonexistent_unit(
         line_user_id) == UserStateEnum.AWAITING_CONTENTS_NAME
 
     # Step 2: 輸入不存在的單元名稱
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_message_text(
             text=invalid_unit, user_id=line_user_id))
@@ -566,7 +566,7 @@ def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_s
 
     user_state = container.user_state_accessor()
 
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_message_text(
             text="助教安安，我有問題!", user_id=line_user_id))
@@ -581,7 +581,7 @@ def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_s
 
     # 2) 第二次訊息：實際把問題丟出（例如 "退選"）
 
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_message_text(
             text=question_text, user_id=line_user_id))
@@ -627,14 +627,14 @@ def test_leave_interrupt_then_check_score(client, app, container, it_seed_studen
 
     user_state_accessor = container.user_state_accessor()
 
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback("apply_leave", user_id=line_user_id))
     )
     assert resp.status_code == 200
 
     # Step 2: 確認請假 -> 應進入 AWAITING_LEAVE_REASON 並回覆填寫理由提示
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback(
             "[Action]confirm_to_leave", user_id=line_user_id))
@@ -644,7 +644,7 @@ def test_leave_interrupt_then_check_score(client, app, container, it_seed_studen
         line_user_id) == UserStateEnum.AWAITING_LEAVE_REASON
 
     # Step 3: 進行其他會切換狀態的操作
-    resp, _ = post_line_event(
+    resp, _ = client_post_event(
         client, app,
         make_base_envelope(ev_postback(
             "check_homework", user_id=line_user_id))

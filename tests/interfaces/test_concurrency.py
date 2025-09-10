@@ -7,21 +7,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 import requests
-from tests.fixtures.fakes import FakeMoodleRepo
 
 from domain.user_state import UserStateEnum
+from tests.fixtures.fakes import FakeMoodleRepo
 from tests.helpers import (ev_follow, ev_message_text, ev_postback,
-                           line_signature, make_base_envelope, wait_for)
-
-
-# ---------- utils ----------
-
-
-def _post_json(url, secret, payload):
-    body_str = json.dumps(payload, separators=(",", ":"))
-    sig = line_signature(secret, body_str)
-    headers = {"X-Line-Signature": sig, "Content-Type": "application/json"}
-    return requests.post(url, data=body_str.encode("utf-8"), headers=headers, timeout=5)
+                           line_signature, make_base_envelope, outer_post_event, wait_for)
 
 
 # ---------- tests ----------
@@ -30,6 +20,10 @@ def _post_json(url, secret, payload):
 def test_true_concurrency_register_same_student_id(
     live_server, app, container, it_seed_course, line_api_service_spy
 ):
+    def all_reply_texts(spy):
+        for r in spy.replies:
+            for t in r.get("texts", []):
+                yield r["reply_token"], t
     """
     兩位使用者（U_A, U_B）同時用同一個學號註冊。
     期望：只有一位成功；另一位收到「學號已被使用」的提示；DB 不會把兩位都綁上。
@@ -53,7 +47,7 @@ def test_true_concurrency_register_same_student_id(
 
     # --- Sanity check: 背景處理是否有在跑？ ------------------------------------
     # 先用一個單純 follow 事件，看是否會產生任何回覆
-    resp = _post_json(url, secret, make_base_envelope(
+    resp = outer_post_event(url, secret, make_base_envelope(
         ev_follow(user_id="U_SANITY", reply_token="rt_follow_SANITY")))
     assert resp.status_code == 200
     ok_bg = wait_for(lambda: any(r.get("reply_token") ==
@@ -66,7 +60,7 @@ def test_true_concurrency_register_same_student_id(
     with container.moodle_repo.override(fake_moodle):
         # 兩位都 follow（不強求同時）
         for uid in ("U_A", "U_B"):
-            resp = _post_json(url, secret, make_base_envelope(
+            resp = outer_post_event(url, secret, make_base_envelope(
                 ev_follow(user_id=uid, reply_token=f"rt_follow_{uid}")))
             assert resp.status_code == 200
 
@@ -79,7 +73,7 @@ def test_true_concurrency_register_same_student_id(
                 ev_message_text(text=student_id, user_id=uid,
                                 reply_token=reply_token)
             )
-            return _post_json(url, secret, payload)
+            return outer_post_event(url, secret, payload)
 
         with ThreadPoolExecutor(max_workers=2) as ex:
             futs = [
@@ -116,16 +110,12 @@ def test_true_concurrency_register_same_student_id(
         assert got[0].student_id == student_id
 
         # 等待至少一則成功問候 & 一則「已被使用」訊息（文案可彈性匹配）
-        success_ok = wait_for(lambda: any("很高興認識你" in (r.get("text") or "")
-                              for r in line_api_service_spy.replies), timeout=6.0)
-        conflict_ok = wait_for(
-            lambda: any(
-                ("已被其他 Line 帳號使用" in (r.get("text") or "")) or (
-                    "已被使用" in (r.get("text") or ""))
-                for r in line_api_service_spy.replies
-            ),
-            timeout=6.0,
-        )
+        success_ok = wait_for(lambda: any(
+            "很高興認識你" in t for _, t in all_reply_texts(line_api_service_spy)), timeout=6.0)
+
+        conflict_ok = wait_for(lambda: any("此學號已被其他 Line 帳號使用，請洽詢助教。" in t
+                               for _, t in all_reply_texts(line_api_service_spy)), timeout=6.0,)
+
         if not (success_ok and conflict_ok):
             raise AssertionError(f"訊息回覆不符預期：{line_api_service_spy.replies}")
 
@@ -184,4 +174,5 @@ def test_batch_events_in_one_request(live_server, app, container, it_seed_studen
 
     # 4) （可選）檢查最終狀態：依你的業務而定。
     #    若 apply_leave 不改狀態，可能仍是 IDLE；若會進入請假流程，可能是 AWAITING_LEAVE_REASON。
-    assert container.user_state_accessor().get_state("U_X") == UserStateEnum.AWAITING_TA_QUESTION
+    assert container.user_state_accessor().get_state(
+        "U_X") == UserStateEnum.AWAITING_TA_QUESTION
