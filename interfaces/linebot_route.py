@@ -99,11 +99,14 @@ def on_message(
     elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
         check_score_service.check_score(
             student=student, reply_token=event.reply_token, target_content=text, mistake_review_sheet_url=mistake_review_sheet_url, message_log_id=message_log_id)
+        return
     elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
         user_state_accessor.set_state(user_id, UserStateEnum.IDLE)
+        return
     if text == "助教安安，我有問題!":
         ask_ta_service.start_inquiry(
             student=student, reply_token=event.reply_token)
+        return
     else:
         pass
 
@@ -152,7 +155,7 @@ def on_postback(
     parsed = parse_postback(data)
 
     message_log_id = chatbot_logger.log_message(
-        student_id=student.student_id, message=data, context_title=student.context_title)
+        student_id=student.student_id, message=parsed.action, context_title=student.context_title)
 
     if parsed.action == 'apply_leave':
         leave_service.apply_for_leave(
@@ -283,18 +286,17 @@ def create_linebot_blueprint(container):
 
     @bp.post("/linebot/linebot/")
     def webhook():
+        secret = current_app.config["LINE_CHANNEL_SECRET"]
+        body = request.get_data(as_text=True)
+        sig = request.headers.get("X-Line-Signature")
+
+        # ✅ 直接處理，避免被 except 捕捉
+        if not _valid_signature(secret, body, sig):
+            current_app.logger.warning("Invalid signature")
+            return "", 400
         try:
-            secret = current_app.config["LINE_CHANNEL_SECRET"]
-            body = request.get_data(as_text=True)
-            sig = request.headers.get("X-Line-Signature")
-
-            if not _valid_signature(secret, body, sig):
-                current_app.logger.warning("Invalid signature")
-                abort(400)
-
             ex = _get_executor(current_app._get_current_object())
             current_app.logger.info("SUBMIT payload len=%d", len(body))
-            # ✅ 把 signature 一起傳進背景，讓 parser.parse 使用
             ex.submit(_process_payload_in_bg,
                       current_app._get_current_object(), body, sig)
             return "", 200
