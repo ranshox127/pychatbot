@@ -180,13 +180,6 @@ def seed_units(
             return v.strftime("%Y-%m-%d %H:%M:%S")
         return str(v)
 
-    if not units:
-        units = [{
-            "contents_name": "C1_單元一",
-            "lesson_date": default_lesson_date,
-            "publish_flag": 1,
-        }]
-
     inferred_ctx_id = _infer_context_id(context_title)
 
     # 1) review_publish（review-system DB）
