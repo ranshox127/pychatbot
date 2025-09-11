@@ -40,6 +40,16 @@ def wait_for(cond, timeout=8.0, interval=0.02):
         time.sleep(interval)
     return False
 
+
+def consistently_false(predicate, duration=8.0, interval=0.02):
+    """在整個 duration 期間 predicate 都應該為 False。"""
+    deadline = time.time() + float(duration)
+    while time.time() < deadline:
+        if predicate():
+            return False   # 一旦出現 True 就失敗
+        time.sleep(interval)
+    return True
+
 # ---------- Payload Builders ----------
 
 
