@@ -80,9 +80,9 @@ jobs:
         # 健康檢查
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"
-          --health-interval:
-          --health-timeout:
-          --health-retries:
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
 
     steps:
       - uses: actions/checkout@v4
@@ -136,4 +136,4 @@ jobs:
       - name: Run integration tests
         env:
           TEST_WAIT_TIMEOUT: "6"
-        run: uv run pytest -m "integration" -q -o log_cli: -o log_cli_level:
+        run: uv run pytest -m "integration" -q -o log_cli=true -o log_cli_level=INFO
