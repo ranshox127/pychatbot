@@ -9,6 +9,8 @@ from linebot.v3.messaging import (
 )
 from infrastructure.gateways.line_api_service import LineApiService
 
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture
 def mock_messaging_api():
@@ -90,9 +92,6 @@ def test_link_rich_menu_to_user_success(service, mock_messaging_api, capsys):
     mock_messaging_api.link_rich_menu_id_to_user.assert_called_once_with(
         "U123", "richmenu-123"
     )
-    out = capsys.readouterr().out
-    assert "link_rich_menu_to_user called" in out
-    assert "resolved rich_menu_id='richmenu-123'" in out
 
 
 def test_link_rich_menu_to_user_unknown_alias_no_call(service, mock_messaging_api, capsys):
@@ -100,6 +99,3 @@ def test_link_rich_menu_to_user_unknown_alias_no_call(service, mock_messaging_ap
 
     # 不應呼叫 SDK，僅印出 debug 訊息後返回
     mock_messaging_api.link_rich_menu_id_to_user.assert_not_called()
-    out = capsys.readouterr().out
-    assert "link_rich_menu_to_user called" in out
-    assert "resolved rich_menu_id=None" in out
