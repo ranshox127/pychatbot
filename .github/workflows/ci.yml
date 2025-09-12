@@ -38,10 +38,15 @@ jobs:
     env:
       FLASK_ENV: test
       PYTHONPATH: ${{ github.workspace }}
+
       CHATBOT_DB_HOST: 127.0.0.1
       CHATBOT_DB_USER: root
       CHATBOT_DB_PASSWORD: root
       CHATBOT_DB_PORT: 3306
+
+      LINEBOT_DB_NAME: linebot_test
+      VERIFY_DB_NAME: GenAI_verify_test
+      REVIEW_SYSTEM_DB_NAME: review_system_test
     services:
       mysql:
         image: mysql:8.0
