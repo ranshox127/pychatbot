@@ -4,16 +4,14 @@ import pytest
 from domain.user_state import UserStateEnum
 from tests.helpers import make_base_envelope, ev_message_text, client_post_event, wait_for
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_register_flow(client, app, it_seed_course, student_repo_stub, service_spies):
+def test_message_register_flow(client, app, student_repo_stub, service_spies):
     # 未註冊（收到訊息 -> 當作註冊學號）
-
-    course_title = "1122_程式設計-Python_黃鈺晴教師"
     line_id = 'test_id'
     student_id = '114514'
-
-    # it_seed_course(context_title=course_title)
 
     # 學生查無此人 → 會走註冊流程
     student_repo_stub.set_find_by_line_id(line_id, None)
@@ -26,8 +24,8 @@ def test_message_register_flow(client, app, it_seed_course, student_repo_stub, s
 
     # 驗證：確實呼叫了註冊服務
     reg_spy = service_spies["registration"]
-    assert reg_spy.called(
-        "register_student"), "預期呼叫 registration.register_student，但沒有"
+    assert wait_for(lambda: reg_spy.called("register_student")
+                    ), "預期呼叫 registration.register_student，但沒有"
     call = reg_spy.last_call("register_student")
     # 我們 helper 的預設 replyToken
     assert call.args == (line_id, student_id, "test_reply_token_123")
@@ -65,9 +63,8 @@ def test_message_awaiting_leave_reason_flows_to_leave_service(client, app,
     resp, _ = client_post_event(client, app, payload)
     assert resp.status_code == 200
 
-    ok = wait_for(lambda: service_spies["leave"].called(
-        "submit_leave_reason"), timeout=2.0)
-    assert ok, f"預期 submit_leave_reason，但沒看到；calls={service_spies['leave'].calls}"
+    assert wait_for(lambda: service_spies["leave"].called(
+        "submit_leave_reason"), timeout=2.0), f"預期 submit_leave_reason，但沒看到；calls={service_spies['leave'].calls}"
 
     call = service_spies["leave"].last_call("submit_leave_reason")
     assert call.kwargs == {
@@ -111,9 +108,8 @@ def test_message_awaiting_ta_question_flows_to_ask_ta(client, app,
     resp, _ = client_post_event(client, app, payload)
     assert resp.status_code == 200
 
-    ok = wait_for(lambda: service_spies["ask_ta"].called(
-        "submit_question"), timeout=2.0)
-    assert ok, f"預期 submit_question，但沒看到；calls={service_spies['ask_ta'].calls}"
+    assert wait_for(lambda: service_spies["ask_ta"].called(
+        "submit_question"), timeout=2.0), f"預期 submit_question，但沒看到；calls={service_spies['ask_ta'].calls}"
 
     call = service_spies["ask_ta"].last_call("submit_question")
     assert call.kwargs == {
@@ -154,9 +150,8 @@ def test_message_awaiting_contents_name_flows_to_check_score(client, app, contai
     resp, _ = client_post_event(client, app, payload)
     assert resp.status_code == 200
 
-    ok = wait_for(lambda: service_spies["score"].called(
-        "check_score"), timeout=2.0)
-    assert ok, f"預期 check_score，但沒看到；calls={service_spies['score'].calls}"
+    assert wait_for(lambda: service_spies["score"].called(
+        "check_score"), timeout=2.0), f"預期 check_score，但沒看到；calls={service_spies['score'].calls}"
 
     call = service_spies["score"].last_call("check_score")
     assert call.kwargs == {
@@ -200,9 +195,8 @@ def test_message_idle_and_command_triggers_start_inquiry(client, app,
     resp, _ = client_post_event(client, app, payload)
     assert resp.status_code == 200
 
-    ok = wait_for(lambda: service_spies["ask_ta"].called(
-        "start_inquiry"), timeout=2.0)
-    assert ok, f"預期 start_inquiry，但沒看到；calls={service_spies['ask_ta'].calls}"
+    assert wait_for(lambda: service_spies["ask_ta"].called(
+        "start_inquiry"), timeout=2.0), f"預期 start_inquiry，但沒看到；calls={service_spies['ask_ta'].calls}"
 
     call = service_spies["ask_ta"].last_call("start_inquiry")
     assert call.kwargs == {
