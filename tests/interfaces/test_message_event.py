@@ -46,6 +46,7 @@ def test_message_awaiting_leave_reason_flows_to_leave_service(client, app,
         student_id=student_id,
         line_user_id=line_id,
         context_title=course_title,
+        name=name,
         is_registered=lambda: True,  # 讓第二層檢查 pass
     )
 

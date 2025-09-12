@@ -47,6 +47,29 @@ jobs:
       LINEBOT_DB_NAME: linebot_test
       VERIFY_DB_NAME: GenAI_verify_test
       REVIEW_SYSTEM_DB_NAME: review_system_test
+
+      MOODLE_DB_HOST: "localhost"
+      MOODLE_DB_PORT: "5432"
+      MOODLE_DB_USER: "postgres"
+      MOODLE_DB_PASSWORD: ""
+      MOODLE_DB_NAME: "moodle"
+      
+      MOODLE_SSH_HOST: ""
+      MOODLE_SSH_USER: ""
+      MOODLE_SSH_PASSWORD: ""
+      MOODLE_SSH_PORT: "22"
+
+      OJ_DB_HOST: "localhost"
+      OJ_DB_USER: "postgres"
+      OJ_DB_PASSWORD: ""
+      OJ_DB_NAME: "onlinejudge"
+      OJ_DB_PORT: "5432"
+
+      OJ_SSH_HOST: ""
+      OJ_SSH_USER: ""
+      OJ_SSH_PASSWORD: ""
+      OJ_SSH_PORT: "22"
+
     services:
       mysql:
         image: mysql:8.0
@@ -57,9 +80,9 @@ jobs:
         # 健康檢查
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"
-          --health-interval=5s
-          --health-timeout=3s
-          --health-retries=20
+          --health-interval:
+          --health-timeout:
+          --health-retries:
 
     steps:
       - uses: actions/checkout@v4
@@ -112,5 +135,5 @@ jobs:
 
       - name: Run integration tests
         env:
-          TEST_WAIT_TIMEOUT: "20"
-        run: uv run pytest -m "integration" -q -o log_cli=true -o log_cli_level=INFO
+          TEST_WAIT_TIMEOUT: "6"
+        run: uv run pytest -m "integration" -q -o log_cli: -o log_cli_level:
