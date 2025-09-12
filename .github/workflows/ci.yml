@@ -131,9 +131,9 @@ jobs:
           mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS tmp_check; USE tmp_check; CREATE TABLE t(id INT); INSERT INTO t VALUES (1); SELECT COUNT(*) FROM t;"
 
       - name: Run infrastructure tests
-        run: uv run pytest -m "infrastructure" -q
+        run: uv run pytest -n auto -m "infrastructure" -q
 
       - name: Run integration tests
         env:
           TEST_WAIT_TIMEOUT: "6"
-        run: uv run pytest -m "integration" -q -o log_cli=true -o log_cli_level=INFO
+        run: uv run pytest -n auto -m "integration" -q -o log_cli=true -o log_cli_level=INFO
