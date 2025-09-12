@@ -14,7 +14,8 @@ import pytest
 
 from infrastructure.postgresql_onlinejudge_repository import PostgreSQLOnlinejudgeRepository
 
-pytestmark = pytest.mark.infrastructure
+pytestmark = pytest.mark.contract
+
 
 @pytest.fixture
 def repo():
@@ -24,6 +25,7 @@ def repo():
                   'ssh_username': 'dummy', 'ssh_password': 'dummy'}
     return PostgreSQLOnlinejudgeRepository(db_config, ssh_config)
 
+
 @pytest.fixture
 def mock_postgresql_connection():
     mock_tunnel = MagicMock()
@@ -32,6 +34,7 @@ def mock_postgresql_connection():
     mock_cursor.fetchone.return_value = (15,)
     mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
     return mock_tunnel, mock_conn, mock_cursor
+
 
 @patch('infrastructure.postgresql_onlinejudge_repository.PostgreSQLOnlinejudgeRepository._get_connection')
 def test_get_exercise_number_by_contents_name(mock_get_connection, mock_postgresql_connection, repo):

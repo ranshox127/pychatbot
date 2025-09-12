@@ -8,6 +8,8 @@ from domain.course import Course, CourseUnit
 from domain.score import ScoreAggregator, ScoreReport
 from domain.student import RoleEnum, Student, StudentStatus
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def student():
@@ -142,10 +144,10 @@ def test_score_aggregator_should_return_score_report(student, course, aggregator
     assert report == ScoreReport(
         contents_name="C1",
         scores={
-        'OJ Exercise(完成題數)': "9 / 10",
-        'OJ Advance(完成題數)':"3 / 5",
-        '總結概念成績': "100",
-        '錯誤回顧成績':"100"
+            'OJ Exercise(完成題數)': "9 / 10",
+            'OJ Advance(完成題數)': "3 / 5",
+            '總結概念成績': "100",
+            '錯誤回顧成績': "100"
         }
     )
 

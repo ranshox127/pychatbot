@@ -9,6 +9,7 @@ from tests.helpers import (consistently_false, ev_follow, ev_message_text, ev_po
                            make_base_envelope, client_post_event, wait_for)
 from tests.fixtures.fakes import FakeMoodleRepo
 
+pytestmark = pytest.mark.integration
 
 def all_reply_texts(spy):
     for r in spy.replies:

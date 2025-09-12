@@ -2,6 +2,14 @@
 
 用於協助 Python 程式設計通識課的同學查詢分數、出席、提問；以及通知總結評分、回饋的 Linebot 後端．
 
+## run tests
+
+- `uv run -m pytest -m unit`
+- `uv run -m pytest -m infrastructure`
+- `uv run -m pytest -m contract`
+- `uv run -m pytest -m integration`
+- `uv run -m pytest -m e2e`
+
 ## Issue
 
 ### Race condition

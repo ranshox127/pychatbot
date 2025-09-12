@@ -8,6 +8,8 @@ from application.check_attendance_service import CheckAttendanceService
 from domain.event_log import EventEnum
 from domain.student import RoleEnum, Student, StudentStatus
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def student():

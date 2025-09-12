@@ -14,7 +14,8 @@ from tests.helpers import (ev_follow, ev_message_text, ev_postback,
                            line_signature, make_base_envelope, outer_post_event, wait_for)
 
 
-# ---------- tests ----------
+pytestmark = [pytest.mark.integration, pytest.mark.e2e]
+
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
 def test_true_concurrency_register_same_student_id(

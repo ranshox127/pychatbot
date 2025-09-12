@@ -6,6 +6,8 @@ from interfaces.postback_parser import parse_postback
 from tests.helpers import (
     client_post_event, ev_postback, make_base_envelope, wait_for)
 
+pytestmark = pytest.mark.integration
+
 
 def test_postback_event_parse():
     """

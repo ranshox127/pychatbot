@@ -39,9 +39,13 @@ import hashlib
 import hmac
 import json
 from types import SimpleNamespace
+
+import pytest
 from tests.fixtures.spies import FuncSpy, FakeExecutor
 from interfaces.linebot_route import _valid_signature
 import interfaces.linebot_route as route
+
+pytestmark = pytest.mark.contract
 
 
 def test_valid_signature_true():

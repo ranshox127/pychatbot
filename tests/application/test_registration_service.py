@@ -8,6 +8,8 @@ from application.registration_service import RegistrationService
 from domain.student import Student, RoleEnum, StudentStatus
 from domain.moodle_enrollment import MoodleEnrollment
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def student_repo(): return MagicMock()

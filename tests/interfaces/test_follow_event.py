@@ -2,6 +2,8 @@
 import pytest
 from tests.helpers import make_base_envelope, ev_follow, client_post_event, wait_for
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
 def test_follow_unregistered_triggers_register_prompt(client, app, service_spies):

@@ -14,7 +14,7 @@ import pytest
 from domain.moodle_enrollment import MoodleEnrollment
 from infrastructure.postgresql_moodle_repository import PostgreSQLMoodleRepository
 
-pytestmark = pytest.mark.infrastructure
+pytestmark = pytest.mark.contract
 
 
 @pytest.fixture

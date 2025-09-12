@@ -1,9 +1,13 @@
 # uv run -m pytest tests/application/test_mail_carrier.py
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from application.mail_carrier import (EmailContent, GmailSMTPMailCarrier,
                                       LeaveEmailContent)
 from domain.leave_request import LeaveRequest
+
+pytestmark = pytest.mark.unit
 
 
 def test_leave_email_subject_and_body():

@@ -6,6 +6,9 @@ import pytest
 
 from infrastructure.postgresql_moodle_repository import LazyMoodleConnectionManager
 
+
+pytestmark = pytest.mark.contract
+
 # 我們需要 patch 掉所有外部依賴
 # 使用 autospec=True 可以讓 mock 物件的簽名與原物件一致，更安全
 
