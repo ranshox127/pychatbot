@@ -33,8 +33,12 @@ jobs:
         run: uv run pytest -n auto -m "contract" -q
 
   # --- Infrastructure & Integration 測試（需要 MySQL） ---
-  infra-integration:
+  db-tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [infrastructure, integration]  # ← 兩種測試類型，會平行跑兩個 job
     env:
       FLASK_ENV: test
       PYTHONPATH: ${{ github.workspace }}
@@ -53,7 +57,6 @@ jobs:
       MOODLE_DB_USER: "postgres"
       MOODLE_DB_PASSWORD: ""
       MOODLE_DB_NAME: "moodle"
-      
       MOODLE_SSH_HOST: ""
       MOODLE_SSH_USER: ""
       MOODLE_SSH_PASSWORD: ""
@@ -64,7 +67,6 @@ jobs:
       OJ_DB_PASSWORD: ""
       OJ_DB_NAME: "onlinejudge"
       OJ_DB_PORT: "5432"
-
       OJ_SSH_HOST: ""
       OJ_SSH_USER: ""
       OJ_SSH_PASSWORD: ""
@@ -76,8 +78,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           TZ: Asia/Taipei
-        ports: ['3306:3306']
-        # 健康檢查
+        ports: ["3306:3306"]
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"
           --health-interval=5s
@@ -99,18 +100,14 @@ jobs:
           uv sync
           uv pip install pytest-xdist
 
-      - name: Wait for MySQL to be ready
+      - name: "Wait for MySQL to be ready"
         run: |
           for i in {1..30}; do
             if mysqladmin ping -h 127.0.0.1 -proot --silent; then
-              echo "✅ MySQL is ready"
-              break
-            fi
-            echo "⏳ Waiting for MySQL..."
-            sleep 2
+              echo "✅ MySQL is ready (after $i tries)"; break; fi
+            echo "⏳ Waiting for MySQL... ($i/30)"; sleep 2
           done
 
-      # 用步驟匯入 schema（取代 service volume 掛載）
       - name: Initialize schemas
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS linebot_test CHARACTER SET utf8mb4;"
@@ -124,16 +121,19 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL time_zone = '+08:00';"
 
-      - name: Sanity for DB & TZ
+      - name: "Sanity for DB & TZ"
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e "SELECT DATABASE();"
           mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@global.time_zone, @@session.time_zone;"
           mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS tmp_check; USE tmp_check; CREATE TABLE t(id INT); INSERT INTO t VALUES (1); SELECT COUNT(*) FROM t;"
 
+      # ─── 真正跑測試：用 if 分流，不重複上面共用的內容 ───
       - name: Run infrastructure tests
-        run: uv run pytest -n auto -m "infrastructure" -q
+        if: matrix.target == 'infrastructure'
+        run: uv run pytest -m "infrastructure" -q
 
       - name: Run integration tests
+        if: matrix.target == 'integration'
         env:
-          TEST_WAIT_TIMEOUT: "6"
-        run: uv run pytest -n auto -m "integration" -q -o log_cli=true -o log_cli_level=INFO
+          TEST_WAIT_TIMEOUT: "6"     # CI 慢一點，拉長等待
+        run: uv run pytest -m "integration" -q -o log_cli=true -o log_cli_level=INFO
