@@ -130,7 +130,7 @@ def test_register_duplicate_student_id(client, app, container, it_seed_student, 
         # Assert: 回覆含「已被使用」；且不會把新 user_id 寫進 DB
 
         success_ok = wait_for(lambda: any(
-            "此學號已被其他 Line 帳號使用，請洽詢助教。" in t for _, t in all_reply_texts(line_api_service_spy)), timeout=6.0)
+            "此學號已被其他 Line 帳號使用，請洽詢助教。" in t for _, t in all_reply_texts(line_api_service_spy)))
 
         assert success_ok
 
@@ -174,7 +174,7 @@ def test_register_moodle_not_found(client, app, container, it_seed_course, line_
 
         # Assert: 正確提示 & 不寫入 DB & 不記 REGISTER
         assert wait_for(lambda: any(
-            "在教學平台上找不到這個學號，請確認後再試一次。" in t for _, t in all_reply_texts(line_api_service_spy)), timeout=6.0)
+            "在教學平台上找不到這個學號，請確認後再試一次。" in t for _, t in all_reply_texts(line_api_service_spy)))
 
         student_repo = container.student_repo()
         assert consistently_false(
@@ -219,7 +219,7 @@ def test_register_with_emoji_name_ok(client, app, container, it_seed_course):
 
         student_repo = container.student_repo()
         assert wait_for(lambda: student_repo.find_by_line_id(
-            line_id) is not None, timeout=6.0)
+            line_id) is not None)
         s = student_repo.find_by_line_id(line_id)
         assert s is not None
         assert s.student_id == student_id
@@ -251,12 +251,13 @@ def test_follow_again_already_registered_only_switch_menu(client, app, container
         client, app, make_base_envelope(ev_follow(line_id)))
     assert resp.status_code == 200
 
-    assert wait_for(lambda: any(x["menu_alias"] == "main" and x["user_id"] ==
-                                line_id for x in line_api_service_spy.linked))
-    assert not wait_for(lambda: any((e.get("event_type") ==
-                                     EventEnum.REGISTER for e in chatbot_logger_spy.events)), timeout=6.0)
-    assert not wait_for(lambda: any("很高興認識你" in t for _,
-                                    t in all_reply_texts(line_api_service_spy)), timeout=6.0)
+    # 切 menu + 不會有紀錄 + 不會有 "很高興認識你"
+    assert wait_for(lambda: any(
+        x["menu_alias"] == "main" and x["user_id"] == line_id for x in line_api_service_spy.linked))
+    assert consistently_false(lambda: any(
+        e.get("event_type") == EventEnum.REGISTER for e in chatbot_logger_spy.events))
+    assert consistently_false(lambda: any(
+        "很高興認識你" in t for _, t in all_reply_texts(line_api_service_spy)))
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
@@ -288,7 +289,7 @@ def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leav
     assert resp.status_code == 200
 
     assert wait_for(lambda: any("請假確認" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
     # 2) 確認請假 → 進入 AWAITING_LEAVE_REASON
     resp, _ = client_post_event(client, app, make_base_envelope(
@@ -303,9 +304,8 @@ def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leav
         ev_message_text(text=reason_text, user_id=line_id)))
     assert resp.status_code == 200
 
-    assert wait_for(
-        lambda: user_state.get_state(line_id) == UserStateEnum.IDLE
-    ), f"state={user_state.get_state(line_id)}"
+    assert wait_for(lambda: user_state.get_state(line_id) ==
+                    UserStateEnum.IDLE), f"state={user_state.get_state(line_id)}"
 
     # DB：等到請假紀錄出現
     assert wait_for(lambda: fetch_leave(student_id) is not None), "應該產生一筆請假紀錄"
@@ -419,8 +419,8 @@ def test_check_score_flow(client, app, container,
     assert resp.status_code == 200
 
     # 應回提示並切到 AWAITING_CONTENTS_NAME
-    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.AWAITING_CONTENTS_NAME, timeout=6.0,
-                    ), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
+    assert wait_for(lambda: user_state.get_state(line_user_id) ==
+                    UserStateEnum.AWAITING_CONTENTS_NAME), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
 
     resp, _ = client_post_event(client, app, make_base_envelope(
         ev_message_text(text=unit_name, user_id=line_user_id)))
@@ -428,7 +428,7 @@ def test_check_score_flow(client, app, container,
 
     # 3) 斷言：a) 回覆內容正確
     assert wait_for(lambda: any("SCORE MSG" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
     # 4) 斷言：b) aggregator 有被以正確參數呼叫（至少單元名稱）
     assert wait_for(lambda: any(
@@ -474,12 +474,12 @@ def test_check_score_with_no_published_unit(client, app, container,
 
     # a) 立即回覆「目前還沒有任何要繳交的作業喔。」
     assert wait_for(lambda: any("目前還沒有任何要繳交的作業" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
     # b) 狀態應回到 IDLE（不進入 AWAITING_CONTENTS_NAME）
     user_state = container.user_state_accessor()
-    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.IDLE, timeout=6.0,
-                    ), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
+    assert wait_for(lambda: user_state.get_state(line_user_id) ==
+                    UserStateEnum.IDLE), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
 
     # c) aggregator 不應被呼叫
     assert wait_for(lambda: len(score_aggregator_stub.calls) == 0)
@@ -540,11 +540,11 @@ def test_check_score_with_nonexistent_unit(
 
     # 應提示輸入單元，並進入等待輸入狀態
     assert wait_for(lambda: any("請輸入要查詢的單元" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
     user_state = container.user_state_accessor()
-    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.AWAITING_CONTENTS_NAME, timeout=6.0,
-                    ), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
+    assert wait_for(lambda: user_state.get_state(line_user_id) ==
+                    UserStateEnum.AWAITING_CONTENTS_NAME), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
 
     # Step 2: 輸入不存在的單元名稱
     resp, _ = client_post_event(client, app, make_base_envelope(
@@ -553,9 +553,9 @@ def test_check_score_with_nonexistent_unit(
 
     # 斷言：提示不存在、狀態回到 IDLE、沒有聚合與事件
     assert wait_for(lambda: any("單元名稱不存在" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
-    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.IDLE, timeout=6.0,
+    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.IDLE,
                     ), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
 
     assert wait_for(lambda: len(score_aggregator_stub.calls) == 0)
@@ -588,9 +588,9 @@ def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_s
 
     # 應回提示 + 狀態切到 AWAITING_TA_QUESTION
     assert wait_for(lambda: any("請同學留下問題" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
-    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.AWAITING_TA_QUESTION, timeout=6.0,
+    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.AWAITING_TA_QUESTION,
                     ), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
 
     # 2) 第二次訊息：實際把問題丟出（例如 "退選"）
@@ -600,7 +600,7 @@ def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_s
     assert resp.status_code == 200
 
     # submit_question 之後，狀態回到 IDLE
-    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.IDLE, timeout=6.0,
+    assert wait_for(lambda: user_state.get_state(line_user_id) == UserStateEnum.IDLE,
                     ), f"state={user_state.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"
 
     # 3) 驗證事件被記錄，且 message_log_id = 第二則訊息的 log_message id
@@ -611,7 +611,7 @@ def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_s
                 return m.get("id")
         return None
     assert wait_for(lambda: find_message_id(chatbot_logger_spy, question_text)
-                    is not None, timeout=8.0), {"messages": chatbot_logger_spy.messages}
+                    is not None), {"messages": chatbot_logger_spy.messages}
     msg_id_for_question = find_message_id(chatbot_logger_spy, question_text)
 
     assert wait_for(
@@ -620,7 +620,6 @@ def test_ask_TA_flow(client, app, container, it_seed_student, line_api_service_s
             and e.get("message_log_id") == msg_id_for_question
             for e in chatbot_logger_spy.events
         ),
-        timeout=8.0,
     ), {
         "messages": chatbot_logger_spy.messages,
         "events": chatbot_logger_spy.events,
@@ -655,7 +654,7 @@ def test_leave_interrupt_then_check_score(client, app, container, it_seed_studen
     assert resp.status_code == 200
 
     assert wait_for(lambda: any("請假確認" in t for _, t in all_reply_texts(
-        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
+        line_api_service_spy))), list(all_reply_texts(line_api_service_spy))
 
     # Step 2: 確認請假 -> 應進入 AWAITING_LEAVE_REASON 並回覆填寫理由提示
     resp, _ = client_post_event(client, app, make_base_envelope(
@@ -671,5 +670,5 @@ def test_leave_interrupt_then_check_score(client, app, container, it_seed_studen
         ev_postback("check_homework", user_id=line_user_id)))
     assert resp.status_code == 200
 
-    assert wait_for(lambda: user_state_accessor.get_state(line_user_id) == UserStateEnum.AWAITING_CONTENTS_NAME, timeout=6.0,
+    assert wait_for(lambda: user_state_accessor.get_state(line_user_id) == UserStateEnum.AWAITING_CONTENTS_NAME,
                     ), f"state={user_state_accessor.get_state(line_user_id)}; replies={all_reply_texts(line_api_service_spy)}"

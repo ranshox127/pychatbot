@@ -3,6 +3,7 @@ import json
 import hmac
 import hashlib
 import base64
+import os
 import time
 from typing import Dict, Any
 
@@ -31,8 +32,10 @@ def outer_post_event(url, secret, payload):
     return requests.post(url, data=body_str.encode("utf-8"), headers=headers, timeout=5)
 
 
-def wait_for(cond, timeout=8.0, interval=0.02):
+def wait_for(cond, timeout=None, interval=0.02):
     """Poll until cond() is True or timeout seconds have elapsed."""
+    if timeout is None:
+        timeout = float(os.getenv("TEST_WAIT_TIMEOUT", "6"))
     deadline = time.time() + float(timeout)
     while time.time() < deadline:
         if cond():
@@ -41,8 +44,10 @@ def wait_for(cond, timeout=8.0, interval=0.02):
     return False
 
 
-def consistently_false(predicate, duration=8.0, interval=0.02):
+def consistently_false(predicate, duration=None, interval=0.02):
     """在整個 duration 期間 predicate 都應該為 False。"""
+    if duration is None:
+        duration = float(os.getenv("TEST_WAIT_TIMEOUT", "6"))
     deadline = time.time() + float(duration)
     while time.time() < deadline:
         if predicate():

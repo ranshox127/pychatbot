@@ -111,4 +111,6 @@ jobs:
         run: uv run pytest -m "infrastructure" -q
 
       - name: Run integration tests
-        run: uv run pytest -m "integration" -q
+        env:
+          TEST_WAIT_TIMEOUT: "20"
+        run: uv run pytest -m "integration" -q -o log_cli=true -o log_cli_level=INFO

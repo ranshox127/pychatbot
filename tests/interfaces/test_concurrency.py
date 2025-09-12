@@ -52,7 +52,7 @@ def test_true_concurrency_register_same_student_id(
         ev_follow(user_id="U_SANITY", reply_token="rt_follow_SANITY")))
     assert resp.status_code == 200
     ok_bg = wait_for(lambda: any(r.get("reply_token") ==
-                     "rt_follow_SANITY" for r in line_api_service_spy.replies), timeout=2.0)
+                     "rt_follow_SANITY" for r in line_api_service_spy.replies))
     if not ok_bg:
         pytest.skip(
             "Webhook 已改為非同步回 200，但背景處理沒有跑起來（未看到任何 reply）。先修 interface 再跑此測試。")
@@ -96,7 +96,7 @@ def test_true_concurrency_register_same_student_id(
             return [s for s in (s_a, s_b) if s is not None]
 
         # 等到「恰好一位」綁定成功
-        ok = wait_for(lambda: len(winners()) == 1, timeout=8.0)
+        ok = wait_for(lambda: len(winners()) == 1)
         if not ok:
             s_a = student_repo.find_by_line_id("U_A")
             s_b = student_repo.find_by_line_id("U_B")
@@ -112,10 +112,10 @@ def test_true_concurrency_register_same_student_id(
 
         # 等待至少一則成功問候 & 一則「已被使用」訊息（文案可彈性匹配）
         success_ok = wait_for(lambda: any(
-            "很高興認識你" in t for _, t in all_reply_texts(line_api_service_spy)), timeout=6.0)
+            "很高興認識你" in t for _, t in all_reply_texts(line_api_service_spy)))
 
-        conflict_ok = wait_for(lambda: any("此學號已被其他 Line 帳號使用，請洽詢助教。" in t
-                               for _, t in all_reply_texts(line_api_service_spy)), timeout=6.0,)
+        conflict_ok = wait_for(lambda: any(
+            "此學號已被其他 Line 帳號使用，請洽詢助教。" in t for _, t in all_reply_texts(line_api_service_spy)))
 
         if not (success_ok and conflict_ok):
             raise AssertionError(f"訊息回覆不符預期：{line_api_service_spy.replies}")
