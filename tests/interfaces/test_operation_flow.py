@@ -11,6 +11,7 @@ from tests.fixtures.fakes import FakeMoodleRepo
 
 pytestmark = pytest.mark.integration
 
+
 def all_reply_texts(spy):
     for r in spy.replies:
         for t in r.get("texts", []):
@@ -259,7 +260,7 @@ def test_follow_again_already_registered_only_switch_menu(client, app, container
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leave_repo_spy, fetch_leave):
+def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leave_repo_spy, line_api_service_spy, fetch_leave):
     """
     Scenario: 成功完成請假申請
     Given 我已經註冊並登入系統
@@ -285,6 +286,9 @@ def test_leave_full_flow(client, app, container, it_seed_student, mail_spy, leav
     resp, _ = client_post_event(client, app, make_base_envelope(
         ev_postback("apply_leave", user_id=line_id)))
     assert resp.status_code == 200
+
+    assert wait_for(lambda: any("請假確認" in t for _, t in all_reply_texts(
+        line_api_service_spy)), timeout=6.0), list(all_reply_texts(line_api_service_spy))
 
     # 2) 確認請假 → 進入 AWAITING_LEAVE_REASON
     resp, _ = client_post_event(client, app, make_base_envelope(
