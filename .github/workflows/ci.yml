@@ -53,8 +53,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: root
           TZ: Asia/Taipei
-        ports:
-          - 3306:3306
+        ports: ['3306:3306']
         # 健康檢查
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"
@@ -102,7 +101,7 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL time_zone = '+08:00';"
 
-      - name: Sanity: DB & TZ
+      - name: Sanity for DB & TZ
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e "SELECT DATABASE();"
           mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@global.time_zone, @@session.time_zone;"
