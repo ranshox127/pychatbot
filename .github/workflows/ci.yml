@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync
-          uv run python -m pip install pytest-xdist
+          uv pip install pytest-xdist
 
       - name: Run unit tests
         run: uv run pytest -n auto -m "unit" -q
@@ -67,7 +67,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mysql-client
           uv sync
-          uv run python -m pip install pytest-xdist
+          uv pip install pytest-xdist
 
       - name: Wait for MySQL to be ready
         run: |
