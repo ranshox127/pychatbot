@@ -1,0 +1,97 @@
+name: Python Chatbot CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+jobs:
+  # --- 單元與契約測試（純邏輯，不碰 IO） ---
+  unit-contract:
+    runs-on: ubuntu-latest
+    env:
+      FLASK_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 + uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv run python -m pip install pytest-xdist
+
+      - name: Run unit tests
+        run: uv run pytest -n auto -m "unit" -q
+
+      - name: Run contract tests
+        run: uv run pytest -n auto -m "contract" -q
+
+  # --- Infrastructure & Integration 測試（需要 MySQL） ---
+  infra-integration:
+    runs-on: ubuntu-latest
+    env:
+      FLASK_ENV: test
+      CHATBOT_DB_HOST: 127.0.0.1
+      CHATBOT_DB_USER: root
+      CHATBOT_DB_PASSWORD: root
+      CHATBOT_DB_PORT: 3306
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        # 健康檢查
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 + uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.12"
+
+      - name: Install mysql client and deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          uv sync
+          uv run python -m pip install pytest-xdist
+
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -proot --silent; then
+              echo "✅ MySQL is ready"
+              break
+            fi
+            echo "⏳ Waiting for MySQL..."
+            sleep 2
+          done
+
+      # 用步驟匯入 schema（取代 service volume 掛載）
+      - name: Initialize schemas
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS linebot_test CHARACTER SET utf8mb4;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS GenAI_verify_test CHARACTER SET utf8mb4;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS review_system_test CHARACTER SET utf8mb4;"
+          mysql -h 127.0.0.1 -uroot -proot linebot_test       < schema_linebot.sql
+          mysql -h 127.0.0.1 -uroot -proot GenAI_verify_test  < schema_verify.sql
+          mysql -h 127.0.0.1 -uroot -proot review_system_test < schema_rs.sql
+
+      - name: Run infrastructure tests
+        run: uv run pytest -n auto -m "infrastructure" -q
+
+      - name: Run integration tests
+        run: uv run pytest -n auto -m "integration" -q
