@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FLASK_ENV: test
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FLASK_ENV: test
+      PYTHONPATH: ${{ github.workspace }}
       CHATBOT_DB_HOST: 127.0.0.1
       CHATBOT_DB_USER: root
       CHATBOT_DB_PASSWORD: root
