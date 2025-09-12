@@ -52,6 +52,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
+          TZ: Asia/Taipei
         ports:
           - 3306:3306
         # 健康檢查
@@ -97,8 +98,18 @@ jobs:
           mysql -h 127.0.0.1 -uroot -proot GenAI_verify_test  < schema_verify.sql
           mysql -h 127.0.0.1 -uroot -proot review_system_test < schema_rs.sql
 
+      - name: Set MySQL timezone
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL time_zone = '+08:00';"
+
+      - name: Sanity: DB & TZ
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "SELECT DATABASE();"
+          mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@global.time_zone, @@session.time_zone;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS tmp_check; USE tmp_check; CREATE TABLE t(id INT); INSERT INTO t VALUES (1); SELECT COUNT(*) FROM t;"
+
       - name: Run infrastructure tests
-        run: uv run pytest -n auto -m "infrastructure" -q
+        run: uv run pytest -m "infrastructure" -q
 
       - name: Run integration tests
-        run: uv run pytest -n auto -m "integration" -q
+        run: uv run pytest -m "integration" -q
