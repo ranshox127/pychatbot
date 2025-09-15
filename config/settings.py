@@ -139,17 +139,18 @@ class ProductionConfig(BaseConfig):
     }
 
     MOODLE_DB_CONFIG = {
-        "host": os.getenv("MOODLE_DB_HOST"),
-        "database": os.getenv("MOODLE_DB_NAME"),
-        "user": os.getenv("MOODLE_DB_USER"),
-        "password": os.getenv("MOODLE_DB_PASSWORD"),
-        "port": os.getenv("MOODLE_DB_PORT"),
+        "host": os.getenv("MOODLE_DB_HOST", "moodle-pg"),
+        "database": os.getenv("MOODLE_DB_NAME", "moodle"),
+        "user": os.getenv("MOODLE_DB_USER", "postgres"),
+        "password": os.getenv("MOODLE_DB_PASSWORD", "postgres"),
+        "port": os.getenv("MOODLE_DB_PORT", "5432"),
     }
 
     MOODLE_SSH_CONFIG = {
-        "ssh_host": os.getenv("MOODLE_SSH_HOST"),
-        "ssh_username": os.getenv("MOODLE_SSH_USER"),
-        "ssh_password": os.getenv("MOODLE_SSH_PASSWORD"),
+        "enabled": os.getenv("MOODLE_SSH_ENABLED", "false").lower() == "true",
+        "ssh_host": os.getenv("MOODLE_SSH_HOST", ""),
+        "ssh_username": os.getenv("MOODLE_SSH_USER", ""),
+        "ssh_password": os.getenv("MOODLE_SSH_PASSWORD", ""),
         "ssh_port": int(os.getenv("MOODLE_SSH_PORT", 22)),  # 預設 SSH port
     }
 
@@ -169,8 +170,8 @@ class ProductionConfig(BaseConfig):
     }
 
     LINE_RICH_MENUS = {
-        "main": "richmenu-aaaaaaaaaaaa",
-        "register": "richmenu-bbbbbbbbbbbb"
+        "main": os.getenv("MAIN_MENU_RICH_MENU_ID"),
+        "register": os.getenv("VERIFICATION_MENU_RICH_MENU_ID")
     }
     
     MISTAKE_REVIEW_SHEET_URL = os.getenv("MISTAKE_REVIEW_SHEET_URL")
