@@ -1,15 +1,19 @@
-import requests
 import os
 
-LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
-verification_test_rich_menu_id = "richmenu-4667fcc9e76820a929220d8af84d3b2a"
-verification_test_image_path = '/root/pychatbot/test_img/verification_test.png'
+import requests
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+
+LINE_ACCESS_TOKEN = os.getenv("PROD_LINE_TOKEN")
+verification_rich_menu_id = "richmenu-79ae711ecc30ed02d208ea1382066ede"
+verification_image_path = '/Users/jinq/Desktop/pychatbot/test_img/verification_test.png'
 
 headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
            "Content-Type": 'application/json'}
 
 response = requests.post(
-    f'https://api.line.me/v2/bot/user/all/richmenu/{verification_test_rich_menu_id}',
+    f'https://api.line.me/v2/bot/user/all/richmenu/{verification_rich_menu_id}',
     headers=headers
 )
 
