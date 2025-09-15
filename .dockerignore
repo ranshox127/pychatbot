@@ -1,0 +1,12 @@
+.git
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+docker/
+test_img/
+features/
+line_menu/
+*.sql
+*.md
