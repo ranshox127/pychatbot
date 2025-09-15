@@ -151,6 +151,10 @@ def on_postback(
 
     student = student_repository.find_by_line_id(user_id)
 
+    if not student:
+        # 理論上不會有這情況
+        return
+
     data = event.postback.data
     parsed = parse_postback(data)
 
@@ -236,11 +240,10 @@ def _dispatch(event, destination: str):
 
 
 # 3) blueprint 工廠：只負責「用真 secret 替換 parser」+ 解析/派發
-def _valid_signature(secret: str, body: str, sig: str | None) -> bool:
+def _valid_signature(secret: str, body_bytes: bytes, sig: str | None) -> bool:
     if not sig:
         return False
-    mac = hmac.new(secret.encode("utf-8"), body.encode("utf-8"),
-                   hashlib.sha256).digest()
+    mac = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).digest()
     expected = base64.b64encode(mac).decode("utf-8")
     return hmac.compare_digest(sig, expected)
 
@@ -258,20 +261,19 @@ def _get_executor(app):
 
 
 # ✅ 背景執行緒內「用 SDK 解析出事件物件」，再交給 _dispatch
-def _process_payload_in_bg(app, body: str, signature: str):
+def _process_payload_in_bg(app, body_bytes: bytes, signature: str):
     with app.app_context():
         try:
-            # 用真 secret 建 parser（避免全域 parser 秘密不同步）
+            body_text = body_bytes.decode("utf-8")
             parser = WebhookParser(app.config["LINE_CHANNEL_SECRET"])
-            # ← 產生 FollowEvent / MessageEvent / PostbackEvent 物件
-            events = parser.parse(body, signature)
-
-            # 目的地在原始 body 裡，事件物件沒有這個欄位
-            destination = (json.loads(body) or {}).get("destination", "")
+            events = parser.parse(body_text, signature)
+            try:
+                destination = (json.loads(body_text) or {}).get("destination", "")
+            except Exception:
+                destination = ""
 
             app.logger.info("BG start: events=%d", len(events))
             for ev in events:
-                # ← 現在 isinstance 會成立，handlers 會被呼叫
                 _dispatch(ev, destination)
             app.logger.info("BG done: events=%d", len(events))
 
@@ -287,28 +289,29 @@ def create_linebot_blueprint(container):
     @bp.post("/linebot/linebot/")
     def webhook():
         secret = current_app.config["LINE_CHANNEL_SECRET"]
-        body = request.get_data(as_text=True)
-        sig = request.headers.get("X-Line-Signature")
+        body_bytes = request.get_data()
+        sig = (request.headers.get("X-Line-Signature") or "").strip()
 
         # ✅ 直接處理，避免被 except 捕捉
-        if not _valid_signature(secret, body, sig):
+        if not _valid_signature(secret, body_bytes, sig):
             current_app.logger.warning("Invalid signature")
             return "", 400
         try:
             ex = _get_executor(current_app._get_current_object())
-            current_app.logger.info("SUBMIT payload len=%d", len(body))
-            ex.submit(_process_payload_in_bg,
-                      current_app._get_current_object(), body, sig)
-            return "", 200
 
         except Exception as e:
             current_app.logger.exception("webhook failed: %s", e)
             # 臨時 fallback（便於過渡調試；確定穩定後可移除）
             try:
                 _process_payload_in_bg(
-                    current_app._get_current_object(), body, sig)
+                    current_app._get_current_object(), body_bytes, sig)
                 return "", 200
             except Exception:
                 return "", 500
+
+        current_app.logger.info("SUBMIT payload len=%d", len(body_bytes))
+        ex.submit(_process_payload_in_bg,
+                  current_app._get_current_object(), body_bytes, sig)
+        return "", 200
 
     return bp
