@@ -1,8 +1,12 @@
 # uv run -m pytest tests/application/test_user_state_accessor.py
 from unittest.mock import MagicMock
 
+import pytest
+
 from application.user_state_accessor import UserStateAccessor
 from domain.user_state import UserState, UserStateEnum
+
+pytestmark = pytest.mark.unit
 
 
 def test_get_state_returns_existing_state():

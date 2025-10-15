@@ -3,8 +3,11 @@ import json
 import hmac
 import hashlib
 import base64
+import os
 import time
 from typing import Dict, Any
+
+import requests
 
 
 def line_signature(channel_secret: str, body: str) -> str:
@@ -13,7 +16,7 @@ def line_signature(channel_secret: str, body: str) -> str:
     return base64.b64encode(mac).decode("utf-8")
 
 
-def post_line_event(client, app, payload: Dict[str, Any], path: str = "/linebot/linebot/"):
+def client_post_event(client, app, payload: Dict[str, Any], path: str = "/linebot/linebot/"):
     """將 payload 轉成正確簽章後送進 Flask。回傳 (response, body_str)。"""
     body_str = json.dumps(payload, separators=(",", ":"))
     sig = line_signature(app.config["LINE_CHANNEL_SECRET"], body_str)
@@ -22,8 +25,17 @@ def post_line_event(client, app, payload: Dict[str, Any], path: str = "/linebot/
     return resp, body_str
 
 
-def wait_for(cond, timeout=8.0, interval=0.02):
+def outer_post_event(url, secret, payload):
+    body_str = json.dumps(payload, separators=(",", ":"))
+    sig = line_signature(secret, body_str)
+    headers = {"X-Line-Signature": sig, "Content-Type": "application/json"}
+    return requests.post(url, data=body_str.encode("utf-8"), headers=headers, timeout=5)
+
+
+def wait_for(cond, timeout=None, interval=0.02):
     """Poll until cond() is True or timeout seconds have elapsed."""
+    if timeout is None:
+        timeout = float(os.getenv("TEST_WAIT_TIMEOUT", "6"))
     deadline = time.time() + float(timeout)
     while time.time() < deadline:
         if cond():
@@ -31,7 +43,20 @@ def wait_for(cond, timeout=8.0, interval=0.02):
         time.sleep(interval)
     return False
 
+
+def consistently_false(predicate, duration=None, interval=0.02):
+    """在整個 duration 期間 predicate 都應該為 False。"""
+    if duration is None:
+        duration = float(os.getenv("TEST_WAIT_TIMEOUT", "6"))
+    deadline = time.time() + float(duration)
+    while time.time() < deadline:
+        if predicate():
+            return False   # 一旦出現 True 就失敗
+        time.sleep(interval)
+    return True
+
 # ---------- Payload Builders ----------
+
 
 def make_base_envelope(event: Dict[str, Any]) -> Dict[str, Any]:
     """LINE Webhook 外層 envelope，覆蓋單一事件用。"""

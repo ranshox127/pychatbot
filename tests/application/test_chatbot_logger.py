@@ -2,9 +2,13 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pytest
+
 from application.chatbot_logger import ChatbotLogger
 from domain.event_log import EventEnum, EventLog
 from domain.message_log import MessageLog
+
+pytestmark = pytest.mark.unit
 
 
 def test_log_message_should_call_repo_with_correct_data():

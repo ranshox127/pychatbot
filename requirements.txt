@@ -1,15 +1,16 @@
-    beautifulsoup4>=4.13.4
-    dependency-injector>=4.48.1
-    dotenv>=0.9.9
-    flask>=3.0.3
-    flask-cors>=5.0.0
-    line-bot-sdk>=3.13.0
-    mysql-connector-python>=9.0.0
-    ngrok==1.4.0
-    openai>=1.86.0
-    pandas>=2.0.3
-    psycopg2-binary>=2.9.10
-    pymysql>=1.1.1
-    pytest>=8.3.5
-    requests>=2.32.4
-    sshtunnel>=0.4.0
+beautifulsoup4>=4.13.4
+dependency-injector>=4.48.1
+dotenv>=0.9.9
+flask>=3.0.3
+flask-cors>=5.0.0
+line-bot-sdk>=3.13.0
+mysql-connector-python>=9.0.0
+ngrok==1.4.0
+openai>=1.86,<2
+pandas>=2.0.3
+psycopg2-binary>=2.9.10
+pymysql>=1.1.1
+pytest>=8.3.5
+requests>=2.32.4
+sshtunnel>=0.4.0
+paramiko>=3,<4

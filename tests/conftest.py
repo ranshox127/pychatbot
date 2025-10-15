@@ -37,11 +37,8 @@ def container(app):
 
 pytest_plugins = [
     "tests.fixtures.mysql_fixtures",
-    "tests.fixtures.postgresql_fixtures",
-    "tests.fixtures.db_tx",
     "tests.fixtures.db_truncate",
-    "tests.fixtures.seed",
-    "tests.fixtures.seed_commit",
+    "tests.fixtures.seeder_wrapper",
     "tests.fixtures.spies",
-    "tests.fixtures.live_server",
+    "tests.fixtures.live_server"
 ]

@@ -56,6 +56,4 @@ flask_production.log
 quick_check.py
 
 schema_*
-
-gitleaks*.json
-EOF
+note.md

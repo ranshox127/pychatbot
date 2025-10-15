@@ -4,6 +4,8 @@ import pytest
 from infrastructure.mysql_message_log_repository import MySQLMessageLogRepository
 from domain.message_log import MessageLog
 
+pytestmark = pytest.mark.infrastructure
+
 
 @pytest.fixture
 def repo(test_config):
@@ -11,28 +13,21 @@ def repo(test_config):
 
 
 @pytest.fixture(autouse=True)
-def clean_message_logs(mysql_conn):
-    with mysql_conn.cursor() as cur:
-        cur.execute("TRUNCATE TABLE message_logs")
-    mysql_conn.commit()
-
+def clean_dbs(linebot_clean):
     yield
 
-    with mysql_conn.cursor() as cur:
-        cur.execute("TRUNCATE TABLE message_logs")
-    mysql_conn.commit()
 
-
-def test_save_event_log_inserts_correctly(repo, mysql_conn):
+def test_save_event_log_inserts_correctly(repo, linebot_clean):
     message_log = MessageLog(
         datetime.now(),
         "114514",
         "身體不適",
         "1122_程式設計-Python_黃鈺晴教師"
     )
+    
     repo.save_message_log(message_log)
 
-    with mysql_conn.cursor() as cur:
+    with linebot_clean.cursor() as cur:
         cur.execute("SELECT * FROM message_logs ORDER BY log_id DESC LIMIT 1")
         row = cur.fetchone()
         assert row is not None

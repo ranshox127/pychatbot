@@ -1,0 +1,139 @@
+name: Python Chatbot CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+jobs:
+  # --- 單元與契約測試（純邏輯，不碰 IO） ---
+  unit-contract:
+    runs-on: ubuntu-latest
+    env:
+      FLASK_ENV: test
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 + uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv pip install pytest-xdist
+
+      - name: Run unit tests
+        run: uv run pytest -n auto -m "unit" -q
+
+      - name: Run contract tests
+        run: uv run pytest -n auto -m "contract" -q
+
+  # --- Infrastructure & Integration 測試（需要 MySQL） ---
+  db-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [infrastructure, integration]  # ← 兩種測試類型，會平行跑兩個 job
+    env:
+      FLASK_ENV: test
+      PYTHONPATH: ${{ github.workspace }}
+
+      CHATBOT_DB_HOST: 127.0.0.1
+      CHATBOT_DB_USER: root
+      CHATBOT_DB_PASSWORD: root
+      CHATBOT_DB_PORT: 3306
+
+      LINEBOT_DB_NAME: linebot_test
+      VERIFY_DB_NAME: GenAI_verify_test
+      REVIEW_SYSTEM_DB_NAME: review_system_test
+
+      MOODLE_DB_HOST: "localhost"
+      MOODLE_DB_PORT: "5432"
+      MOODLE_DB_USER: "postgres"
+      MOODLE_DB_PASSWORD: ""
+      MOODLE_DB_NAME: "moodle"
+      MOODLE_SSH_HOST: ""
+      MOODLE_SSH_USER: ""
+      MOODLE_SSH_PASSWORD: ""
+      MOODLE_SSH_PORT: "22"
+
+      OJ_DB_HOST: "localhost"
+      OJ_DB_USER: "postgres"
+      OJ_DB_PASSWORD: ""
+      OJ_DB_NAME: "onlinejudge"
+      OJ_DB_PORT: "5432"
+      OJ_SSH_HOST: ""
+      OJ_SSH_USER: ""
+      OJ_SSH_PASSWORD: ""
+      OJ_SSH_PORT: "22"
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          TZ: Asia/Taipei
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 + uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: "3.12"
+
+      - name: Install mysql client and deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          uv sync
+          uv pip install pytest-xdist
+
+      - name: "Wait for MySQL to be ready"
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -proot --silent; then
+              echo "✅ MySQL is ready (after $i tries)"; break; fi
+            echo "⏳ Waiting for MySQL... ($i/30)"; sleep 2
+          done
+
+      - name: Initialize schemas
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS linebot_test CHARACTER SET utf8mb4;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS GenAI_verify_test CHARACTER SET utf8mb4;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS review_system_test CHARACTER SET utf8mb4;"
+          mysql -h 127.0.0.1 -uroot -proot linebot_test       < schema_linebot.sql
+          mysql -h 127.0.0.1 -uroot -proot GenAI_verify_test  < schema_verify.sql
+          mysql -h 127.0.0.1 -uroot -proot review_system_test < schema_rs.sql
+
+      - name: Set MySQL timezone
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL time_zone = '+08:00';"
+
+      - name: "Sanity for DB & TZ"
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "SELECT DATABASE();"
+          mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@global.time_zone, @@session.time_zone;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS tmp_check; USE tmp_check; CREATE TABLE t(id INT); INSERT INTO t VALUES (1); SELECT COUNT(*) FROM t;"
+
+      # ─── 真正跑測試：用 if 分流，不重複上面共用的內容 ───
+      - name: Run infrastructure tests
+        if: matrix.target == 'infrastructure'
+        run: uv run pytest -m "infrastructure" -q
+
+      - name: Run integration tests
+        if: matrix.target == 'integration'
+        env:
+          TEST_WAIT_TIMEOUT: "6"     # CI 慢一點，拉長等待
+        run: uv run pytest -m "integration" -q -o log_cli=true -o log_cli_level=INFO

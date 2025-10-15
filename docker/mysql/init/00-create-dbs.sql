@@ -1,0 +1,3 @@
+CREATE DATABASE IF NOT EXISTS linebot_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS GenAI_verify_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS review_system_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

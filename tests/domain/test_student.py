@@ -4,6 +4,8 @@ import pytest
 
 from domain.student import Student, StudentStatus, RoleEnum
 
+pytestmark = pytest.mark.unit
+
 
 def test_register_valid_student_should_return_registered_student():
     # Arrange

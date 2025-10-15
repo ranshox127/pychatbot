@@ -1,20 +1,28 @@
 # uv run -m pytest tests/interfaces/test_postback_event.py
 import pytest
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 from domain.user_state import UserStateEnum
-from tests.helpers import make_base_envelope, ev_postback, post_line_event
+from interfaces.postback_parser import parse_postback
+from tests.helpers import (
+    client_post_event, ev_postback, make_base_envelope, wait_for)
+
+pytestmark = pytest.mark.integration
 
 
-def _make_student():
-    # 簡單學生物件即可（避免依賴 domain class）
-    return SimpleNamespace(
-        student_id="S0001",
-        line_user_id="U_POSTBACK",
-        context_title="1122_程式設計-Python_黃鈺晴教師",
-        is_registered=lambda: True,
-    )
+def test_postback_event_parse():
+    """
+    Postback 解析
+    parse_postback 能正確解析事件資料
+    parsed.action / parsed.ns 能正確分流
+    """
+    fake_line_payload = ev_postback(data="apply_leave")
+
+    data = fake_line_payload["postback"]['data']
+
+    parsed = parse_postback(data)
+
+    assert parsed.action == "apply_leave"
+    assert parsed.ns is None
 
 
 @pytest.mark.parametrize(
@@ -23,88 +31,61 @@ def _make_student():
         ("apply_leave", "leave_apply"),
         ("fetch_absence_info", "attendance"),
         ("check_homework", "score_publish"),
-        ("[Action]confirm_to_leave", "leave_reason"),
-        ("[Action]cancel_to_leave", "cancel_idle"),
+        ("action:confirm_leave", "leave_reason"),
+        ("action:cancel", "cancel_idle"),
     ],
 )
-def test_postback_triggers_expected_service(client, app, container, data, expect_called):
-    # ---- Arrange: common mocks ----
-    student = _make_student()
+@pytest.mark.usefixtures("linebot_mysql_truncate")
+def test_postback_triggers_expected_service(client, app,
+                                            it_seed_student, chatbot_logger_spy, service_spies, user_state_spy,
+                                            data, expect_called):
 
-    mock_repo = MagicMock()
-    mock_repo.find_by_line_id.return_value = student
+    course_title = "1132_程式設計-Python_黃鈺晴教師"
+    line_id = 'test_id'
+    student_id = '114514'
+    name = 'owen'
 
-    mock_logger = MagicMock()
-    mock_logger.log_message.return_value = 777  # 給 confirm_to_leave 用
-
-    mock_leave = MagicMock()
-    mock_att = MagicMock()
-    mock_score = MagicMock()
-    mock_state = MagicMock()
-
-    with container.student_repo.override(mock_repo), \
-            container.chatbot_logger.override(mock_logger), \
-            container.leave_service.override(mock_leave), \
-            container.check_attendance_service.override(mock_att), \
-            container.check_score_service.override(mock_score), \
-            container.user_state_accessor.override(mock_state):
-
-        payload = make_base_envelope(ev_postback(
-            data=data, user_id=student.line_user_id))
-
-        # ---- Act ----
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
-
-    # ---- Assert: common logging call ----
-    mock_logger.log_message.assert_called_once_with(
-        student_id=student.student_id, message=data, context_title=student.context_title
+    it_seed_student(
+        user_id=line_id,
+        student_id=student_id,
+        name=name,
+        context_title=course_title,
     )
 
+    payload = make_base_envelope(ev_postback(data=data, user_id=line_id))
+
+    resp, _ = client_post_event(client, app, payload)
+
+    assert resp.status_code == 200
+
+    assert wait_for(lambda: any(m.get("message") == data for m in chatbot_logger_spy.messages)
+                    ), f"message 未處理：messages={chatbot_logger_spy.messages}"
+
     # ---- Assert: branch-specific ----
-    if expect_called == "leave_apply":
-        mock_leave.apply_for_leave.assert_called_once_with(
-            student=student, reply_token="test_reply_token_123"
-        )
-        mock_att.check_attendance.assert_not_called()
-        mock_score.check_publish_contents.assert_not_called()
-        mock_leave.ask_leave_reason.assert_not_called()
-        mock_state.set_state.assert_not_called()
+    mapping = {
+        "leave_apply":   ("leave", "apply_for_leave"),
+        "attendance":    ("attendance", "check_attendance"),
+        "score_publish": ("score", "check_publish_contents"),
+        "leave_reason":  ("leave", "ask_leave_reason"),
+        "cancel_idle":   ("state", "set_state"),
+    }
+    svc, method = mapping[expect_called]
 
-    elif expect_called == "attendance":
-        mock_att.check_attendance.assert_called_once_with(
-            student=student, reply_token="test_reply_token_123"
-        )
-        mock_leave.apply_for_leave.assert_not_called()
-        mock_score.check_publish_contents.assert_not_called()
-        mock_leave.ask_leave_reason.assert_not_called()
-        mock_state.set_state.assert_not_called()
+    if svc == "state":
+        assert wait_for(lambda: user_state_spy.called(
+            "set_state")), "預期呼叫 set_state，但沒有"
+        c = user_state_spy.last_call("set_state")
+        assert c.args == (line_id, UserStateEnum.IDLE)
+        return
 
-    elif expect_called == "score_publish":
-        mock_score.check_publish_contents.assert_called_once_with(
-            student=student, reply_token="test_reply_token_123"
-        )
-        mock_leave.apply_for_leave.assert_not_called()
-        mock_att.check_attendance.assert_not_called()
-        mock_leave.ask_leave_reason.assert_not_called()
-        mock_state.set_state.assert_not_called()
+    spy = service_spies[svc]
+    assert wait_for(lambda: spy.called(method), timeout=2.0), \
+        f"預期呼叫 {svc}.{method}，但沒有；calls={spy.calls}"
+    call = spy.last_call(method)
 
-    elif expect_called == "leave_reason":
-        mock_leave.ask_leave_reason.assert_called_once_with(
-            student=student, reply_token="test_reply_token_123", message_log_id=777
-        )
-        mock_leave.apply_for_leave.assert_not_called()
-        mock_att.check_attendance.assert_not_called()
-        mock_score.check_publish_contents.assert_not_called()
-        mock_state.set_state.assert_not_called()
-
-    elif expect_called == "cancel_idle":
-        mock_state.set_state.assert_called_once_with(
-            student.line_user_id, UserStateEnum.IDLE)
-        mock_leave.apply_for_leave.assert_not_called()
-        mock_att.check_attendance.assert_not_called()
-        mock_score.check_publish_contents.assert_not_called()
-        mock_leave.ask_leave_reason.assert_not_called()
-
-    else:
-        raise AssertionError("Unknown expectation key")
+    if method in ("apply_for_leave", "check_attendance", "check_publish_contents", "ask_leave_reason"):
+        assert call.kwargs.get("reply_token") == "test_reply_token_123"
+    if method == "ask_leave_reason":
+        # 建議：避免硬寫 1，可改為「存在且為正整數」
+        msg_id = call.kwargs.get("message_log_id")
+        assert isinstance(msg_id, int) and msg_id > 0

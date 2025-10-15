@@ -1,11 +1,13 @@
 # uv run -m pytest tests/application/test_leave_service.py
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from application.leave_service import LeaveService
 from domain.student import RoleEnum, Student, StudentStatus
 from domain.user_state import UserStateEnum
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.fixture

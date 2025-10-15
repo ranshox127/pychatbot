@@ -4,6 +4,8 @@ import pytest
 from infrastructure.mysql_event_log_repository import MySQLEventLogRepository
 from domain.event_log import EventLog, EventEnum
 
+pytestmark = pytest.mark.infrastructure
+
 
 @pytest.fixture
 def repo(test_config):
@@ -11,10 +13,8 @@ def repo(test_config):
 
 
 @pytest.fixture(autouse=True)
-def clean_event_logs(mysql_conn):
-    with mysql_conn.cursor() as cur:
-        cur.execute("TRUNCATE TABLE event_logs")
-    mysql_conn.commit()
+def clean_dbs(linebot_clean):
+    yield
 
 
 @pytest.mark.parametrize("event_log", [
@@ -29,10 +29,10 @@ def clean_event_logs(mysql_conn):
     EventLog(datetime.now(), "114514", EventEnum.CODING_HELP,
              "C5_A2", None, "1122_程式設計-Python_黃鈺晴教師", 11941),
 ])
-def test_save_event_log_inserts_correctly(repo, mysql_conn, event_log):
+def test_save_event_log_inserts_correctly(repo, linebot_clean, event_log):
     repo.save_event_log(event_log)
 
-    with mysql_conn.cursor() as cur:
+    with linebot_clean.cursor() as cur:
         cur.execute("SELECT * FROM event_logs ORDER BY log_id DESC LIMIT 1")
         row = cur.fetchone()
         assert row is not None

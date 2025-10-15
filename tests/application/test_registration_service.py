@@ -8,6 +8,8 @@ from application.registration_service import RegistrationService
 from domain.student import Student, RoleEnum, StudentStatus
 from domain.moodle_enrollment import MoodleEnrollment
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def student_repo(): return MagicMock()
@@ -49,7 +51,7 @@ def test_handle_follow_event_registered(service, student_repo, line_service):
     )
     service.handle_follow_event("lineid", "reply_token")
     line_service.link_rich_menu_to_user.assert_called_once_with(
-        "lineid", "main_menu")
+        "lineid", "main")
 
 
 def test_handle_follow_event_unregistered(service, student_repo, line_service):
@@ -116,7 +118,7 @@ def test_register_student_success(service, student_repo, moodle_repo, course_rep
     state_repo.save.assert_called_once()
     logger.log_event.assert_called_once()
     line_service.link_rich_menu_to_user.assert_called_once_with(
-        "lineid", "main_menu")
+        "lineid", "main")
     line_service.reply_text_message.assert_called()
     msg = line_service.reply_text_message.call_args[0][1]
     assert "很高興認識你" in msg and "1122_課程" in msg

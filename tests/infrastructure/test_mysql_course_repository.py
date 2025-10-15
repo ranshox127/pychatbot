@@ -3,6 +3,8 @@ import pytest
 
 from infrastructure.mysql_course_repository import MySQLCourseRepository
 
+pytestmark = pytest.mark.infrastructure
+
 
 @pytest.fixture
 def repo(test_config):
@@ -10,28 +12,15 @@ def repo(test_config):
 
 
 @pytest.fixture(autouse=True)
-def clean_course_info(mysql_conn, rs_mysql_conn):
-    with mysql_conn.cursor() as cur:
-        cur.execute("TRUNCATE TABLE course_info")
-        cur.execute("TRUNCATE TABLE change_HW_deadline")
-    mysql_conn.commit()
-
-    with rs_mysql_conn.cursor() as cur:
-        cur.execute("TRUNCATE TABLE review_publish")
-    rs_mysql_conn.commit()
+def clean_dbs(linebot_clean, review_clean):
+    # linebot_clean / review_clean 在前後已幫你清表並提供連線
+    yield
 
 
-def test_get_course_shell_returns_correct_course(mysql_conn, repo):
+def test_get_course_shell_returns_correct_course(infra_seed_course, repo):
     # 先插入測試資料
-    with mysql_conn.cursor() as cur:
-        cur.execute("""
-            INSERT IGNORE INTO course_info (
-                context_title, mails_of_TAs, leave_notice, day_of_week, OJ_contest_title, present_url, status, reserved
-            ) VALUES (
-                '1122_測試課程', 'ta@example.com', 1, 3, 'contest_123', 'https://example.com', 'in_progress', ''
-            )
-        """)
-    mysql_conn.commit()
+    infra_seed_course(context_title="1122_測試課程", mails_of_TAs="ta@example.com", day_of_week=3,
+                      OJ_contest_title="contest_123", present_url="https://example.com")
 
     course = repo.get_course_shell("1122_測試課程")
 
@@ -43,58 +32,36 @@ def test_get_course_shell_returns_correct_course(mysql_conn, repo):
     assert course.attendance_sheet_url == "https://example.com"
 
 
-def test_get_in_progress_courses_returns_list(mysql_conn, repo):
-    with mysql_conn.cursor() as cur:
-        cur.execute("""
-            INSERT IGNORE INTO course_info (
-                context_title, mails_of_TAs, leave_notice, day_of_week, OJ_contest_title, present_url, status, reserved
-            ) VALUES (
-                '1122_測試課程', 'ta@example.com', 1, 2, 'contest_A', 'https://link.com', 'in_progress', ''
-            )
-        """)
-    mysql_conn.commit()
+def test_get_in_progress_courses_returns_list(infra_seed_course, repo):
+    infra_seed_course(context_title="1122_測試課程", mails_of_TAs="ta@example.com", day_of_week=3,
+                      OJ_contest_title="contest_123", present_url="https://example.com")
 
     courses = repo.get_in_progress_courses()
+
     titles = [c.context_title for c in courses]
 
     assert "1122_測試課程" in titles
 
 
-def test_populate_units_adds_units(rs_mysql_conn, mysql_conn, repo):
-    with mysql_conn.cursor() as cur:
-        cur.execute("""
-            INSERT IGNORE INTO course_info (
-                context_title, mails_of_TAs, leave_notice, day_of_week, OJ_contest_title, present_url, status, reserved
-            ) VALUES (
-                '1122_測試課程', 'ta@example.com', 1, 3, 'contest_123', 'https://example.com', 'in_progress', ''
-            )
-        """)
-    mysql_conn.commit()
+def test_populate_units_adds_units(infra_seed_course, infra_seed_units, review_clean, linebot_clean, repo):
+
+    infra_seed_course(context_title="1122_測試課程", mails_of_TAs="ta@example.com", day_of_week=3,
+                      OJ_contest_title="contest_123", present_url="https://example.com")
 
     # 取得 course shell
     course = repo.get_course_shell("1122_測試課程")
 
-    # 在 review_publish 插入單元資料（注意欄位改為 lesson_date）
-    with rs_mysql_conn.cursor() as cur:
-        cur.execute("""
-            INSERT IGNORE INTO review_publish (
-                context_title, contents_name, lesson_date, publish_flag
-            ) VALUES (
-                '1122_測試課程', 'C1_變數與資料型態', '2025-08-01 10:00:00', 1
-            )
-        """)
-    rs_mysql_conn.commit()
-
-    # 在 change_homework_deadline 插入對應資料
-    with mysql_conn.cursor() as cur:
-        cur.execute("""
-            INSERT IGNORE INTO change_HW_deadline (
-                context_title, contents_name, OJ_D1, Summary_D1
-            ) VALUES (
-                '1122_測試課程', 'C1_變數與資料型態', 6, 7
-            )
-        """)
-    mysql_conn.commit()
+    infra_seed_units(context_title="1122_測試課程",
+                     units=[{
+                         "contents_name": "C1",
+                         "contents_id": "C1",          # 明確傳也可以
+                         "context_id": 1234,           # 不傳也會自動從 "1234_..." 推 1234
+                         "lesson_date": "2025-08-01 10:00:00",
+                         "publish_flag": 1,
+                         "oj_d1": 6,
+                         "summary_d1": 7,
+                     }],
+                     set_deadline=True)
 
     enriched = repo.populate_units(course)
 

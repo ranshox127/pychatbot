@@ -10,6 +10,8 @@ from domain.score import ScoreReport
 from domain.student import RoleEnum, Student, StudentStatus
 from domain.user_state import UserStateEnum
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def student():

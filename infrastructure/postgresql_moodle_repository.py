@@ -96,12 +96,14 @@ class LazyMoodleConnectionManager:
     """
 
     def __init__(self, db_config, ssh_config, idle_timeout=60):
-        self.db_config = db_config
-        self.ssh_config = ssh_config
-        
+        # host, port, database, user, password
+        self.db_config = dict(db_config)
+        # enabled, ssh_host, ssh_port, ssh_username, ssh_password
+        self.ssh_config = dict(ssh_config)
         self.db_config['port'] = int(self.db_config.get('port', 5432))
         self.ssh_config['ssh_port'] = int(self.ssh_config.get('ssh_port', 22))
-        
+        self.ssh_enabled = bool(self.ssh_config.get('enabled', True))
+
         self.idle_timeout = idle_timeout
         self.lock = Lock()
         self._conn = None
@@ -110,28 +112,39 @@ class LazyMoodleConnectionManager:
 
     def _start(self):
         try:
-            self._tunnel = SSHTunnelForwarder(
-                (self.ssh_config['ssh_host'],
-                 self.ssh_config.get('ssh_port', 22)),
-                ssh_username=self.ssh_config['ssh_username'],
-                ssh_password=self.ssh_config['ssh_password'],
-                remote_bind_address=(
-                    self.db_config['host'], self.db_config['port'])
-            )
-            self._tunnel.start()
+            if self.ssh_enabled:
+                self._tunnel = SSHTunnelForwarder(
+                    (self.ssh_config['ssh_host'],
+                     self.ssh_config.get('ssh_port', 22)),
+                    ssh_username=self.ssh_config['ssh_username'],
+                    ssh_password=self.ssh_config.get('ssh_password'),
+                    remote_bind_address=(
+                        self.db_config['host'], self.db_config['port'])
+                )
+                self._tunnel.start()
+                host = "127.0.0.1"
+                port = self._tunnel.local_bind_port
+            else:
+                # 直連：連目標 host:port（在 compose 內用服務名）
+                host = self.db_config['host']
+                port = self.db_config['port']
+
             self._conn = psycopg2.connect(
-                host="127.0.0.1",
-                port=self._tunnel.local_bind_port,
+                host=host,
+                port=port,
                 database=self.db_config['database'],
                 user=self.db_config['user'],
                 password=self.db_config['password']
             )
         except Exception as e:
             if self._tunnel:
-                self._tunnel.close()
+                try:
+                    self._tunnel.close()
+                except Exception:
+                    pass
             self._tunnel = None
             self._conn = None
-            raise e  # 保留 traceback
+            raise
 
     def _schedule_close(self):
         if self._timer:
@@ -144,6 +157,19 @@ class LazyMoodleConnectionManager:
         with self.lock:
             if self._conn is None:
                 self._start()
+            else:
+                # 連線失效時自動重連
+                try:
+                    with self._conn.cursor() as _test:
+                        _test.execute("SELECT 1")
+                except Exception:
+                    try:
+                        self._conn.close()
+                    except Exception:
+                        pass
+                    self._conn = None
+                    self._start()
+
             self._schedule_close()
             cur = self._conn.cursor()
         try:
@@ -154,8 +180,12 @@ class LazyMoodleConnectionManager:
     def close(self):
         with self.lock:
             if self._conn:
-                self._conn.close()
-                self._conn = None
+                try:
+                    self._conn.close()
+                finally:
+                    self._conn = None
             if self._tunnel:
-                self._tunnel.close()
-                self._tunnel = None
+                try:
+                    self._tunnel.close()
+                finally:
+                    self._tunnel = None

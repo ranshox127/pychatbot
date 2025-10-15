@@ -1,0 +1,78 @@
+# docker-compose.app.yml
+services:
+  mysql-dev-app:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Taipei
+    # 不對外開埠，避免和另一套 mysql-dev 打架
+    # ports: []   # ← 省略即可，不對外暴露
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -proot --silent || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      # 用不同的 named volume，避免資料混到「測試那套」
+      - mysql_data_app:/var/lib/mysql
+      # 跟原來一樣的初始化目錄與 schema 掛載（只有在新的 volume 第一次啟動會跑）
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+      - ./schema_linebot.sql:/schemas/schema_linebot.sql:ro
+      - ./schema_verify.sql:/schemas/schema_verify.sql:ro
+      - ./schema_rs.sql:/schemas/schema_rs.sql:ro
+
+  moodle-pg:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: moodle
+      TZ: Asia/Taipei
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d moodle || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # 開發期不用對外開埠，app 走內網就好。若要本機連，解開下一行用 5433 對外：
+    # ports: ["5433:5432"]
+    volumes:
+      - ./docker/moodle/init:/docker-entrypoint-initdb.d:ro
+
+  app:
+    build: .
+    depends_on:
+      mysql-dev-app:
+        condition: service_healthy
+      moodle-pg:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      FLASK_ENV: production
+
+      MOODLE_DB_HOST: moodle-pg
+      MOODLE_DB_USER: postgres
+      MOODLE_DB_PASSWORD: postgres
+      MOODLE_DB_NAME: moodle
+      MOODLE_DB_PORT: 5432
+
+      MOODLE_SSH_ENABLED: "false"
+
+      PORT: 8096
+      TZ: Asia/Taipei
+      # 讓應用改連 mysql-dev-app（compose 內網 DNS 可用服務名）
+      CHATBOT_DB_HOST: mysql-dev-app
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./:/app:rw
+    command: >
+      sh -lc "exec gunicorn --config gunicorn.conf.py -w 1 --timeout ${GUNICORN_TIMEOUT:-30}
+      -b 0.0.0.0:${PORT:-8096} wsgi:app"
+
+volumes:
+  mysql_data_app: {}
+
+
+# docker compose -f docker-compose.app.yml up --build

@@ -33,6 +33,8 @@ from domain.course import Course, CourseUnit
 MOCK_DATE = date(2025, 9, 25)  # 星期四
 COURSE_START_HOUR = 9
 
+pytestmark = pytest.mark.unit
+
 
 @patch("domain.course.datetime")
 @patch("domain.course.date")

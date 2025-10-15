@@ -3,29 +3,20 @@ import pytest
 from infrastructure.mysql_user_state_repository import MySQLUserStateRepository
 from domain.user_state import UserState, UserStateEnum
 
+pytestmark = pytest.mark.infrastructure
+
 
 @pytest.fixture()
 def repo(test_config):
-    user_state_repo = MySQLUserStateRepository(test_config.LINEBOT_DB_CONFIG)
-
-    # 每個測試前清除目標用戶資料
-    with user_state_repo._get_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE TABLE user_states")
-            conn.commit()
-
-    yield user_state_repo
-
-    # 測試後清除資料
-    with user_state_repo._get_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE TABLE user_states")
-            conn.commit()
+    return MySQLUserStateRepository(test_config.LINEBOT_DB_CONFIG)
 
 
-def test_save_and_get_user_state(repo):
+@pytest.fixture(autouse=True)
+def clean_dbs(linebot_clean):
+    yield
+
+
+def test_save_and_get_user_state(repo, linebot_clean):
     state = UserState("U_test", UserStateEnum.AWAITING_LEAVE_REASON)
     repo.save(state)
 
@@ -36,7 +27,7 @@ def test_save_and_get_user_state(repo):
     assert result.status == UserStateEnum.AWAITING_LEAVE_REASON
 
 
-def test_delete_user_state(repo):
+def test_delete_user_state(repo, linebot_clean):
     state = UserState("U_test", UserStateEnum.IDLE)
     repo.save(state)
 

@@ -99,11 +99,14 @@ def on_message(
     elif session_state == UserStateEnum.AWAITING_CONTENTS_NAME:
         check_score_service.check_score(
             student=student, reply_token=event.reply_token, target_content=text, mistake_review_sheet_url=mistake_review_sheet_url, message_log_id=message_log_id)
+        return
     elif session_state == UserStateEnum.AWAITING_REGRADE_BY_TA_REASON:
         user_state_accessor.set_state(user_id, UserStateEnum.IDLE)
+        return
     if text == "助教安安，我有問題!":
         ask_ta_service.start_inquiry(
             student=student, reply_token=event.reply_token)
+        return
     else:
         pass
 
@@ -148,11 +151,15 @@ def on_postback(
 
     student = student_repository.find_by_line_id(user_id)
 
+    if not student:
+        # 理論上不會有這情況
+        return
+
     data = event.postback.data
     parsed = parse_postback(data)
 
     message_log_id = chatbot_logger.log_message(
-        student_id=student.student_id, message=data, context_title=student.context_title)
+        student_id=student.student_id, message=parsed.action, context_title=student.context_title)
 
     if parsed.action == 'apply_leave':
         leave_service.apply_for_leave(
@@ -233,13 +240,20 @@ def _dispatch(event, destination: str):
 
 
 # 3) blueprint 工廠：只負責「用真 secret 替換 parser」+ 解析/派發
-def _valid_signature(secret: str, body: str, sig: str | None) -> bool:
-    if not sig:
+
+def _valid_signature(secret: str, body: str | bytes, signature: str | None) -> bool:
+    """驗證 X-Line-Signature 是否有效"""
+    if not signature:
         return False
-    mac = hmac.new(secret.encode("utf-8"), body.encode("utf-8"),
-                   hashlib.sha256).digest()
-    expected = base64.b64encode(mac).decode("utf-8")
-    return hmac.compare_digest(sig, expected)
+    try:
+        # LINE 官方簽章是對 body bytes 做 HMAC
+        body_bytes = body.encode("utf-8") if isinstance(body, str) else body
+        mac = hmac.new(secret.encode("utf-8"), body_bytes,
+                       hashlib.sha256).digest()
+        computed_sig = base64.b64encode(mac).decode("utf-8")
+        return hmac.compare_digest(computed_sig, signature)
+    except Exception:
+        return False
 
 
 def _get_executor(app):
@@ -255,27 +269,21 @@ def _get_executor(app):
 
 
 # ✅ 背景執行緒內「用 SDK 解析出事件物件」，再交給 _dispatch
-def _process_payload_in_bg(app, body: str, signature: str):
-    with app.app_context():
-        try:
-            # 用真 secret 建 parser（避免全域 parser 秘密不同步）
-            parser = WebhookParser(app.config["LINE_CHANNEL_SECRET"])
-            # ← 產生 FollowEvent / MessageEvent / PostbackEvent 物件
-            events = parser.parse(body, signature)
+def _process_payload_in_bg(app, body, signature):
+    """背景執行 webhook payload 處理"""
+    try:
+        # 若傳進來的是 bytes，轉成 str
+        body_text = body.decode("utf-8") if isinstance(body, bytes) else body
+        parser = WebhookParser(app.config["LINE_CHANNEL_SECRET"])
+        payload = json.loads(body_text)
+        destination = payload.get("destination")
+        events = parser.parse(body_text, signature)
 
-            # 目的地在原始 body 裡，事件物件沒有這個欄位
-            destination = (json.loads(body) or {}).get("destination", "")
+        for event in events:
+            _dispatch(event, destination)
 
-            app.logger.info("BG start: events=%d", len(events))
-            for ev in events:
-                # ← 現在 isinstance 會成立，handlers 會被呼叫
-                _dispatch(ev, destination)
-            app.logger.info("BG done: events=%d", len(events))
-
-        except InvalidSignatureError:
-            app.logger.warning("BG invalid signature; dropped")
-        except Exception as e:
-            app.logger.exception("Background processing failed: %s", e)
+    except Exception as e:
+        app.logger.error(f"Background processing failed: {e}", exc_info=True)
 
 
 def create_linebot_blueprint(container):
@@ -283,30 +291,28 @@ def create_linebot_blueprint(container):
 
     @bp.post("/linebot/linebot/")
     def webhook():
+        secret = current_app.config["LINE_CHANNEL_SECRET"]
+        body = request.get_data(as_text=True)  # ✅ 傳 str，不要 bytes
+        sig = (request.headers.get("X-Line-Signature") or "").strip()
+
+        if not _valid_signature(secret, body, sig):
+            current_app.logger.warning("Invalid signature")
+            return "", 400
+
         try:
-            secret = current_app.config["LINE_CHANNEL_SECRET"]
-            body = request.get_data(as_text=True)
-            sig = request.headers.get("X-Line-Signature")
-
-            if not _valid_signature(secret, body, sig):
-                current_app.logger.warning("Invalid signature")
-                abort(400)
-
             ex = _get_executor(current_app._get_current_object())
-            current_app.logger.info("SUBMIT payload len=%d", len(body))
-            # ✅ 把 signature 一起傳進背景，讓 parser.parse 使用
-            ex.submit(_process_payload_in_bg,
-                      current_app._get_current_object(), body, sig)
-            return "", 200
-
         except Exception as e:
             current_app.logger.exception("webhook failed: %s", e)
-            # 臨時 fallback（便於過渡調試；確定穩定後可移除）
             try:
                 _process_payload_in_bg(
                     current_app._get_current_object(), body, sig)
                 return "", 200
             except Exception:
                 return "", 500
+
+        current_app.logger.info("SUBMIT payload len=%d", len(body))
+        ex.submit(_process_payload_in_bg,
+                  current_app._get_current_object(), body, sig)
+        return "", 200
 
     return bp

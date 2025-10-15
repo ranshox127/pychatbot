@@ -1,218 +1,241 @@
 # uv run -m pytest tests/interfaces/test_message_event.py
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 import pytest
 from domain.user_state import UserStateEnum
-from tests.helpers import make_base_envelope, ev_message_text, post_line_event
+from tests.helpers import make_base_envelope, ev_message_text, client_post_event, wait_for
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_register_flow(client, app, container, seed_course_commit):
+def test_message_register_flow(client, app, student_repo_stub, service_spies):
     # 未註冊（收到訊息 -> 當作註冊學號）
+    line_id = 'test_id'
+    student_id = '114514'
 
-    seed_course_commit(context_title="1122_程式設計-Python_黃鈺晴教師")
+    # 學生查無此人 → 會走註冊流程
+    student_repo_stub.set_find_by_line_id(line_id, None)
 
-    # 建立 mocks
-    mock_registration = MagicMock()
-    mock_student_repo = MagicMock()
-    mock_student_repo.find_by_line_id.return_value = None  # 查無此人 → 會走註冊流程
+    payload = make_base_envelope(
+        ev_message_text(text=student_id, user_id=line_id))
 
-    with container.registration_service.override(mock_registration), \
-            container.student_repo.override(mock_student_repo):
-
-        payload = make_base_envelope(
-            ev_message_text(text="114514005", user_id="U_NEW")
-        )
-
-        # 送進 webhook
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
+    resp, _ = client_post_event(client, app, payload)
+    assert resp.status_code == 200
 
     # 驗證：確實呼叫了註冊服務
-    mock_registration.register_student.assert_called_once_with(
-        "U_NEW", "114514005", "test_reply_token_123"  # 我們 helper 的預設 replyToken
-    )
+    reg_spy = service_spies["registration"]
+    assert wait_for(lambda: reg_spy.called("register_student")
+                    ), "預期呼叫 registration.register_student，但沒有"
+    call = reg_spy.last_call("register_student")
+    # 我們 helper 的預設 replyToken
+    assert call.args == (line_id, student_id, "test_reply_token_123")
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_awaiting_leave_reason_flows_to_leave_service(client, app, container):
-    # 已註冊學生（回一個簡單物件即可）
+def test_message_awaiting_leave_reason_flows_to_leave_service(client, app,
+                                                              it_seed_student, student_repo_stub, chatbot_logger_spy,
+                                                              user_state_spy, service_spies):
+
+    course_title = "1122_程式設計-Python_黃鈺晴教師"
+    line_id = 'test_id'
+    student_id = '114514'
+    name = 'j'
+    reason = "感冒請假"
+
     student = SimpleNamespace(
-        student_id="S12345678",
-        line_user_id="U1",
-        context_title="1122_程式設計-Python_黃鈺晴教師",
+        student_id=student_id,
+        line_user_id=line_id,
+        context_title=course_title,
+        name=name,
         is_registered=lambda: True,  # 讓第二層檢查 pass
     )
 
-    mock_repo = MagicMock()
-    mock_repo.find_by_line_id.return_value = student
+    it_seed_student(user_id=line_id,
+                    student_id=student_id,
+                    name=name,
+                    context_title=course_title,)
 
-    mock_logger = MagicMock()
-    mock_logger.log_message.return_value = 321
+    student_repo_stub.set_find_by_line_id(line_id, student)
 
-    mock_state = MagicMock()
-    mock_state.get_state.return_value = SimpleNamespace(
-        status=UserStateEnum.AWAITING_LEAVE_REASON)
+    user_state_spy.set_user_state(line_id, UserStateEnum.AWAITING_LEAVE_REASON)
 
-    mock_leave = MagicMock()
+    payload = make_base_envelope(ev_message_text(text=reason, user_id=line_id))
 
-    with container.student_repo.override(mock_repo), \
-            container.chatbot_logger.override(mock_logger), \
-            container.user_state_accessor.override(mock_state), \
-            container.leave_service.override(mock_leave):
+    resp, _ = client_post_event(client, app, payload)
+    assert resp.status_code == 200
 
-        payload = make_base_envelope(
-            ev_message_text(text="感冒請假", user_id="U1"))
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
+    assert wait_for(lambda: service_spies["leave"].called(
+        "submit_leave_reason"), timeout=2.0), f"預期 submit_leave_reason，但沒看到；calls={service_spies['leave'].calls}"
 
-    mock_leave.submit_leave_reason.assert_called_once_with(
-        student=student, reason="感冒請假", reply_token="test_reply_token_123"
-    )
-    # 可補充：logger 有沒有被叫
-    mock_logger.log_message.assert_called_once_with(
-        student_id="S12345678", message="感冒請假", context_title="1122_程式設計-Python_黃鈺晴教師"
-    )
+    call = service_spies["leave"].last_call("submit_leave_reason")
+    assert call.kwargs == {
+        "student": student,
+        "reason": reason,
+        "reply_token": "test_reply_token_123",
+    }
+
+    assert any(m.get("message") ==
+               reason for m in chatbot_logger_spy.messages), chatbot_logger_spy.messages
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_awaiting_ta_question_flows_to_ask_ta(client, app, container):
+def test_message_awaiting_ta_question_flows_to_ask_ta(client, app,
+                                                      it_seed_student, student_repo_stub, chatbot_logger_spy,
+                                                      user_state_spy, service_spies):
+    course_title = "1122_程式設計-Python_黃鈺晴教師"
+    line_id = 'test_id'
+    student_id = '114514'
+    name = 'j'
+    text = "請問作業2提示？"
+
     student = SimpleNamespace(
-        student_id="S12345678",
-        line_user_id="U2",
-        context_title="1122_程式設計-Python_黃鈺晴教師",
-        is_registered=lambda: True,
+        student_id=student_id,
+        line_user_id=line_id,
+        context_title=course_title,
+        is_registered=lambda: True,  # 讓第二層檢查 pass
     )
-    mock_repo = MagicMock()
-    mock_repo.find_by_line_id.return_value = student
 
-    mock_logger = MagicMock()
-    mock_logger.log_message.return_value = 987
+    it_seed_student(user_id=line_id,
+                    student_id=student_id,
+                    name=name,
+                    context_title=course_title,)
 
-    mock_state = MagicMock()
-    mock_state.get_state.return_value = SimpleNamespace(
-        status=UserStateEnum.AWAITING_TA_QUESTION)
+    student_repo_stub.set_find_by_line_id(line_id, student)
 
-    mock_ask_ta = MagicMock()
+    user_state_spy.set_user_state(line_id, UserStateEnum.AWAITING_TA_QUESTION)
 
-    with container.student_repo.override(mock_repo), \
-            container.chatbot_logger.override(mock_logger), \
-            container.user_state_accessor.override(mock_state), \
-            container.ask_ta_service.override(mock_ask_ta):
+    payload = make_base_envelope(ev_message_text(text=text, user_id=line_id))
 
-        payload = make_base_envelope(
-            ev_message_text(text="請問作業2提示？", user_id="U2"))
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
+    resp, _ = client_post_event(client, app, payload)
+    assert resp.status_code == 200
 
-    mock_ask_ta.submit_question.assert_called_once_with(
-        student=student, message_log_id=987
-    )
+    assert wait_for(lambda: service_spies["ask_ta"].called(
+        "submit_question"), timeout=2.0), f"預期 submit_question，但沒看到；calls={service_spies['ask_ta'].calls}"
+
+    call = service_spies["ask_ta"].last_call("submit_question")
+    assert call.kwargs == {
+        "student": student,
+        "message_log_id": 1
+    }
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_awaiting_contents_name_flows_to_check_score(client, app, container):
+def test_message_awaiting_contents_name_flows_to_check_score(client, app, container,
+                                                             it_seed_student, student_repo_stub, user_state_spy,
+                                                             chatbot_logger_spy, service_spies):
+    course_title = "1122_程式設計-Python_黃鈺晴教師"
+    line_id = 'test_id'
+    student_id = '114514'
+    name = 'j'
+    text = "C3"
+
     student = SimpleNamespace(
-        student_id="S0001",
-        line_user_id="U3",
-        context_title="1122_程式設計-Python_黃鈺晴教師",
-        is_registered=lambda: True,
+        student_id=student_id,
+        line_user_id=line_id,
+        context_title=course_title,
+        is_registered=lambda: True,  # 讓第二層檢查 pass
     )
-    mock_repo = MagicMock()
-    mock_repo.find_by_line_id.return_value = student
 
-    mock_logger = MagicMock()
-    mock_logger.log_message.return_value = 555
+    it_seed_student(user_id=line_id,
+                    student_id=student_id,
+                    name=name,
+                    context_title=course_title,)
 
-    mock_state = MagicMock()
-    mock_state.get_state.return_value = SimpleNamespace(
-        status=UserStateEnum.AWAITING_CONTENTS_NAME)
+    student_repo_stub.set_find_by_line_id(line_id, student)
 
-    mock_score = MagicMock()
+    user_state_spy.set_user_state(
+        line_id, UserStateEnum.AWAITING_CONTENTS_NAME)
 
-    with container.student_repo.override(mock_repo), \
-            container.chatbot_logger.override(mock_logger), \
-            container.user_state_accessor.override(mock_state), \
-            container.check_score_service.override(mock_score):
+    payload = make_base_envelope(ev_message_text(text=text, user_id=line_id))
 
-        payload = make_base_envelope(
-            ev_message_text(text="C3", user_id="U3"))
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
+    resp, _ = client_post_event(client, app, payload)
+    assert resp.status_code == 200
 
-    mock_score.check_score.assert_called_once_with(
-        student=student,
-        reply_token="test_reply_token_123",
-        target_content="C3",
-        message_log_id=555,
-    )
+    assert wait_for(lambda: service_spies["score"].called(
+        "check_score"), timeout=2.0), f"預期 check_score，但沒看到；calls={service_spies['score'].calls}"
+
+    call = service_spies["score"].last_call("check_score")
+    assert call.kwargs == {
+        "student": student,
+        "reply_token": "test_reply_token_123",
+        "target_content": text,
+        "mistake_review_sheet_url": container.config.MISTAKE_REVIEW_SHEET_URL(),
+        "message_log_id": 1
+    }
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_idle_and_command_triggers_start_inquiry(client, app, container):
+def test_message_idle_and_command_triggers_start_inquiry(client, app,
+                                                         it_seed_student, student_repo_stub, user_state_spy,
+                                                         chatbot_logger_spy, service_spies):
     # 已註冊 + IDLE + 指令「助教安安，我有問題!」→ 啟動詢問流程
+    course_title = "1122_程式設計-Python_黃鈺晴教師"
+    line_id = 'test_id'
+    student_id = '114514'
+    name = 'j'
+    text = "助教安安，我有問題!"
+
     student = SimpleNamespace(
-        student_id="S0002",
-        line_user_id="U4",
-        context_title="1122_程式設計-Python_黃鈺晴教師",
-        is_registered=lambda: True,
+        student_id=student_id,
+        line_user_id=line_id,
+        context_title=course_title,
+        is_registered=lambda: True,  # 讓第二層檢查 pass
     )
-    mock_repo = MagicMock()
-    mock_repo.find_by_line_id.return_value = student
 
-    mock_logger = MagicMock()
-    mock_logger.log_message.return_value = 42
+    it_seed_student(user_id=line_id,
+                    student_id=student_id,
+                    name=name,
+                    context_title=course_title,)
 
-    mock_state = MagicMock()
-    mock_state.get_state.return_value = SimpleNamespace(
-        status=UserStateEnum.IDLE)
+    student_repo_stub.set_find_by_line_id(line_id, student)
 
-    mock_ask_ta = MagicMock()
+    user_state_spy.set_user_state(line_id, UserStateEnum.IDLE)
 
-    with container.student_repo.override(mock_repo), \
-            container.chatbot_logger.override(mock_logger), \
-            container.user_state_accessor.override(mock_state), \
-            container.ask_ta_service.override(mock_ask_ta):
+    payload = make_base_envelope(ev_message_text(text=text, user_id=line_id))
 
-        payload = make_base_envelope(
-            ev_message_text(text="助教安安，我有問題!", user_id="U4"))
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
+    resp, _ = client_post_event(client, app, payload)
+    assert resp.status_code == 200
 
-    mock_ask_ta.start_inquiry.assert_called_once_with(
-        student=student, reply_token="test_reply_token_123"
-    )
+    assert wait_for(lambda: service_spies["ask_ta"].called(
+        "start_inquiry"), timeout=2.0), f"預期 start_inquiry，但沒看到；calls={service_spies['ask_ta'].calls}"
+
+    call = service_spies["ask_ta"].last_call("start_inquiry")
+    assert call.kwargs == {
+        "student": student,
+        "reply_token": "test_reply_token_123"
+    }
 
 
 @pytest.mark.usefixtures("linebot_mysql_truncate")
-def test_message_idle_default_text(client, app, container):
+def test_message_idle_default_text(client, app,
+                                   it_seed_student, student_repo_stub, user_state_spy,
+                                   chatbot_logger_spy, service_spies):
     # 一般文字
+    course_title = "1122_程式設計-Python_黃鈺晴教師"
+    line_id = 'test_id'
+    student_id = '114514'
+    name = 'j'
+    text = "d"
+
     student = SimpleNamespace(
-        student_id="S0002",
-        line_user_id="U4",
-        context_title="1122_程式設計-Python_黃鈺晴教師",
-        is_registered=lambda: True,
+        student_id=student_id,
+        line_user_id=line_id,
+        context_title=course_title,
+        is_registered=lambda: True,  # 讓第二層檢查 pass
     )
-    mock_repo = MagicMock()
-    mock_repo.find_by_line_id.return_value = student
 
-    mock_logger = MagicMock()
-    mock_logger.log_message.return_value = 42
+    it_seed_student(user_id=line_id,
+                    student_id=student_id,
+                    name=name,
+                    context_title=course_title,)
 
-    mock_state = MagicMock()
-    mock_state.get_state.return_value = SimpleNamespace(
-        status=UserStateEnum.IDLE)
+    student_repo_stub.set_find_by_line_id(line_id, student)
 
-    mock_ask_ta = MagicMock()
+    user_state_spy.set_user_state(line_id, UserStateEnum.IDLE)
+    payload = make_base_envelope(ev_message_text(text=text, user_id=line_id))
 
-    with container.student_repo.override(mock_repo), \
-            container.chatbot_logger.override(mock_logger), \
-            container.user_state_accessor.override(mock_state), \
-            container.ask_ta_service.override(mock_ask_ta):
+    resp, _ = client_post_event(client, app, payload)
+    assert resp.status_code == 200
 
-        payload = make_base_envelope(
-            ev_message_text(text="測試", user_id="U4"))
-        resp, _ = post_line_event(client, app, payload)
-        assert resp.status_code == 200
-
-    mock_ask_ta.start_inquiry.assert_not_called()
+    ask_ta_spy = service_spies["ask_ta"]
+    ask_ta_spy.assert_not_called()
