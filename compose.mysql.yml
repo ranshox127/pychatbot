@@ -22,8 +22,8 @@ services:
 volumes:
   mysql_data:
 
-# docker compose up -d mysql-dev
+# docker compose -f compose.mysql.yml up -d mysql-dev
 
 
-# 停用：docker compose stop（保留容器與 volume）。
-# 清容器但保留資料（volume）：docker compose down（不加 -v）。
+# 停用：`docker compose -f compose.mysql.yml stop`
+# 清除：`docker compose -f compose.mysql.yml down`

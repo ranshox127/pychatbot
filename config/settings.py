@@ -4,7 +4,7 @@ import os
 
 class BaseConfig:
     USE_REAL_LINE = "mock"
-    
+
     @property
     def GRADER_BASE_URL(self) -> str:
         # 預設本機
@@ -13,7 +13,7 @@ class BaseConfig:
     @property
     def GRADER_API_KEY(self) -> str:
         return os.getenv("GRADER_API_KEY", "dev-162-key")
-    
+
     @property
     def SUMMARY_OPENAI_KEY(self) -> str:
         return os.getenv("SUMMARY_API_KEY", "")
@@ -103,7 +103,7 @@ class DevelopmentConfig(BaseConfig):
         "main": "richmenu-2098cb2a534de65d2d1138b9210dbffe",
         "register": "richmenu-4667fcc9e76820a929220d8af84d3b2a"
     }
-    
+
     MISTAKE_REVIEW_SHEET_URL = os.getenv("MISTAKE_REVIEW_SHEET_URL")
 
 
@@ -173,9 +173,12 @@ class ProductionConfig(BaseConfig):
         "main": os.getenv("MAIN_MENU_RICH_MENU_ID"),
         "register": os.getenv("VERIFICATION_MENU_RICH_MENU_ID")
     }
-    
+
     MISTAKE_REVIEW_SHEET_URL = os.getenv("MISTAKE_REVIEW_SHEET_URL")
-    
+
+    EMAIL_SEND_FROM = os.getenv("EMAIL_SEND_FROM")
+    EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
     @property
     def GRADER_BASE_URL(self) -> str:
         v = os.getenv("GRADER_BASE_URL")
