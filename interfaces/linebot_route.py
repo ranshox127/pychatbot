@@ -240,12 +240,20 @@ def _dispatch(event, destination: str):
 
 
 # 3) blueprint 工廠：只負責「用真 secret 替換 parser」+ 解析/派發
-def _valid_signature(secret: str, body_bytes: bytes, sig: str | None) -> bool:
-    if not sig:
+
+def _valid_signature(secret: str, body: str | bytes, signature: str | None) -> bool:
+    """驗證 X-Line-Signature 是否有效"""
+    if not signature:
         return False
-    mac = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).digest()
-    expected = base64.b64encode(mac).decode("utf-8")
-    return hmac.compare_digest(sig, expected)
+    try:
+        # LINE 官方簽章是對 body bytes 做 HMAC
+        body_bytes = body.encode("utf-8") if isinstance(body, str) else body
+        mac = hmac.new(secret.encode("utf-8"), body_bytes,
+                       hashlib.sha256).digest()
+        computed_sig = base64.b64encode(mac).decode("utf-8")
+        return hmac.compare_digest(computed_sig, signature)
+    except Exception:
+        return False
 
 
 def _get_executor(app):
@@ -261,26 +269,21 @@ def _get_executor(app):
 
 
 # ✅ 背景執行緒內「用 SDK 解析出事件物件」，再交給 _dispatch
-def _process_payload_in_bg(app, body_bytes: bytes, signature: str):
-    with app.app_context():
-        try:
-            body_text = body_bytes.decode("utf-8")
-            parser = WebhookParser(app.config["LINE_CHANNEL_SECRET"])
-            events = parser.parse(body_text, signature)
-            try:
-                destination = (json.loads(body_text) or {}).get("destination", "")
-            except Exception:
-                destination = ""
+def _process_payload_in_bg(app, body, signature):
+    """背景執行 webhook payload 處理"""
+    try:
+        # 若傳進來的是 bytes，轉成 str
+        body_text = body.decode("utf-8") if isinstance(body, bytes) else body
+        parser = WebhookParser(app.config["LINE_CHANNEL_SECRET"])
+        payload = json.loads(body_text)
+        destination = payload.get("destination")
+        events = parser.parse(body_text, signature)
 
-            app.logger.info("BG start: events=%d", len(events))
-            for ev in events:
-                _dispatch(ev, destination)
-            app.logger.info("BG done: events=%d", len(events))
+        for event in events:
+            _dispatch(event, destination)
 
-        except InvalidSignatureError:
-            app.logger.warning("BG invalid signature; dropped")
-        except Exception as e:
-            app.logger.exception("Background processing failed: %s", e)
+    except Exception as e:
+        app.logger.error(f"Background processing failed: {e}", exc_info=True)
 
 
 def create_linebot_blueprint(container):
@@ -289,29 +292,27 @@ def create_linebot_blueprint(container):
     @bp.post("/linebot/linebot/")
     def webhook():
         secret = current_app.config["LINE_CHANNEL_SECRET"]
-        body_bytes = request.get_data()
+        body = request.get_data(as_text=True)  # ✅ 傳 str，不要 bytes
         sig = (request.headers.get("X-Line-Signature") or "").strip()
 
-        # ✅ 直接處理，避免被 except 捕捉
-        if not _valid_signature(secret, body_bytes, sig):
+        if not _valid_signature(secret, body, sig):
             current_app.logger.warning("Invalid signature")
             return "", 400
+
         try:
             ex = _get_executor(current_app._get_current_object())
-
         except Exception as e:
             current_app.logger.exception("webhook failed: %s", e)
-            # 臨時 fallback（便於過渡調試；確定穩定後可移除）
             try:
                 _process_payload_in_bg(
-                    current_app._get_current_object(), body_bytes, sig)
+                    current_app._get_current_object(), body, sig)
                 return "", 200
             except Exception:
                 return "", 500
 
-        current_app.logger.info("SUBMIT payload len=%d", len(body_bytes))
+        current_app.logger.info("SUBMIT payload len=%d", len(body))
         ex.submit(_process_payload_in_bg,
-                  current_app._get_current_object(), body_bytes, sig)
+                  current_app._get_current_object(), body, sig)
         return "", 200
 
     return bp
